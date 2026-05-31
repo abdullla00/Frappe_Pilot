@@ -13,7 +13,8 @@ var FRAI = {
     listDoctype: null,
     sending:     false,
     panelWidth:  340,
-    isResizing:  false
+    isResizing:  false,
+    pendingSessionKey: null,   // coding agent: staged change awaiting confirm
 };
 
 $(document).ready(function () {
@@ -304,7 +305,8 @@ function _injectCSS() {
     background: var(--primary-light, #e8f3fd);
 }
 
-#frai-typing {
+#frai-typing,
+#frai-typing-coding {
     display: none;
     align-self: flex-start;
     gap: 5px;
@@ -314,16 +316,20 @@ function _injectCSS() {
     border: 1px solid var(--border-color, #d1d8dd);
     border-radius: 4px 10px 10px 10px;
 }
-#frai-typing.frai-visible { display: flex; }
-#frai-typing span {
+#frai-typing.frai-visible,
+#frai-typing-coding.frai-visible { display: flex; }
+#frai-typing span,
+#frai-typing-coding span {
     width: 5px;
     height: 5px;
     border-radius: 50%;
     background: var(--text-muted, #8d99a6);
     animation: frai-dot .9s infinite;
 }
-#frai-typing span:nth-child(2) { animation-delay: .15s; }
-#frai-typing span:nth-child(3) { animation-delay: .3s; }
+#frai-typing span:nth-child(2),
+#frai-typing-coding span:nth-child(2) { animation-delay: .15s; }
+#frai-typing span:nth-child(3),
+#frai-typing-coding span:nth-child(3) { animation-delay: .3s; }
 @keyframes frai-dot {
     0%,80%,100% { transform:scale(.7); opacity:.4; }
     40%          { transform:scale(1);  opacity:1; }
@@ -387,6 +393,103 @@ body.frai-is-resizing * {
     cursor: ew-resize !important;
     user-select: none !important;
 }
+
+/* ── Coding Agent: preview card ── */
+.frai-preview-card {
+    align-self: flex-start;
+    width: 94%;
+    background: #f0f9ff;
+    border: 1px solid #bae6fd;
+    border-radius: 4px 10px 10px 10px;
+    padding: 12px;
+    font-size: 12px;
+    line-height: 1.6;
+    animation: frai-in .15s ease;
+}
+.frai-preview-card h4 {
+    font-size: 11.5px;
+    font-weight: 700;
+    color: #0369a1;
+    margin: 0 0 8px 0;
+}
+.frai-preview-body {
+    color: var(--text-color, #36414c);
+    margin-bottom: 10px;
+}
+.frai-preview-body ul {
+    margin: 4px 0;
+    padding-left: 16px;
+}
+.frai-preview-body pre {
+    font-size: 10.5px;
+    white-space: pre-wrap;
+    background: #fff;
+    padding: 6px 8px;
+    border-radius: 4px;
+    border: 1px solid #e2e8f0;
+    margin: 4px 0;
+    overflow-x: auto;
+}
+.frai-preview-actions {
+    display: flex;
+    gap: 6px;
+}
+.frai-btn-apply {
+    flex: 1;
+    padding: 7px 10px;
+    border-radius: 6px;
+    border: none;
+    background: #16a34a;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .13s;
+}
+.frai-btn-apply:hover    { background: #15803d; }
+.frai-btn-apply:disabled { background: #86efac; cursor: not-allowed; }
+.frai-btn-cancel {
+    padding: 7px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color, #d1d8dd);
+    background: var(--fg-color, #fff);
+    color: var(--text-muted, #6b7280);
+    font-size: 12px;
+    cursor: pointer;
+    transition: background .13s;
+}
+.frai-btn-cancel:hover { background: var(--control-bg, #f4f5f6); }
+
+/* ── Coding Agent: success card ── */
+.frai-success-card {
+    align-self: flex-start;
+    width: 94%;
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    border-radius: 4px 10px 10px 10px;
+    padding: 12px;
+    font-size: 12px;
+    line-height: 1.6;
+    animation: frai-in .15s ease;
+}
+.frai-success-card h4 {
+    font-size: 11.5px;
+    font-weight: 700;
+    color: #15803d;
+    margin: 0 0 4px 0;
+}
+.frai-rollback-link {
+    display: inline-block;
+    margin-top: 6px;
+    font-size: 11px;
+    color: var(--text-muted, #8d99a6);
+    text-decoration: underline;
+    cursor: pointer;
+    background: none;
+    border: none;
+    padding: 0;
+}
+.frai-rollback-link:hover { color: var(--red, #e74c3c); }
     `;
     document.head.appendChild(style);
 }
@@ -443,6 +546,7 @@ function _buildDOM() {
 
             '<div id="frai-pane-coding" class="frai-tab-pane">' +
                 '<div id="frai-messages-coding" class="frai-messages-area">' +
+                    '<div id="frai-typing-coding"><span></span><span></span><span></span></div>' +
                 '</div>' +
             '</div>' +
 
@@ -616,18 +720,11 @@ function switchTab(tab) {
         }
 
     } else if (tab === "coding") {
-        if (input)  { input.placeholder = "Coding Agent — coming in Phase 2..."; input.disabled = true; }
-        if (sendEl) sendEl.disabled = true;
+        if (input)  { input.placeholder = "Tell me what to add or change in ERPNext..."; input.disabled = false; }
+        if (sendEl) sendEl.disabled = false;
         var codingMsgs = document.getElementById("frai-messages-coding");
-        if (codingMsgs && codingMsgs.querySelectorAll(".frai-bubble").length === 0) {
-            _addBubble(
-                "🛠 <strong>Coding Agent — Phase 2</strong><br><br>" +
-                "This agent will make real changes to your ERPNext: create Custom Fields, " +
-                "write Server Scripts, build Workflows, and more — all from a plain English " +
-                "prompt, with a preview-before-apply safety step.<br><br>" +
-                "Use the <strong>Guide tab</strong> to learn how to do these things manually.",
-                "frai-disabled"
-            );
+        if (codingMsgs && codingMsgs.querySelectorAll(".frai-bubble, .frai-preview-card, .frai-success-card").length === 0) {
+            _showCodingWelcome();
         }
     }
 }
@@ -822,7 +919,9 @@ function _getContextChips() {
 // SEND MESSAGE
 // ════════════════════════════════════════════════════════════════
 function sendMessage() {
-    if (FRAI.sending || FRAI.activeTab !== "guide") return;
+    if (FRAI.sending) return;
+    if (FRAI.activeTab === "coding") { sendCodingMessage(); return; }
+    if (FRAI.activeTab !== "guide") return;
 
     var input = document.getElementById("frai-input");
     if (!input) return;
@@ -901,7 +1000,9 @@ function _getActiveMsgs() {
 
 function _addBubble(html, cssClass, chips) {
     var msgs   = _getActiveMsgs();
-    var typing = document.getElementById("frai-typing");
+    var typing = FRAI.activeTab === "coding"
+        ? document.getElementById("frai-typing-coding")
+        : document.getElementById("frai-typing");
     if (!msgs) return;
 
     var bubble = document.createElement("div");
@@ -940,17 +1041,235 @@ function _removeAllChips() {
 }
 
 function _showTyping() {
-    var t = document.getElementById("frai-typing");
+    var id = FRAI.activeTab === "coding" ? "frai-typing-coding" : "frai-typing";
+    var t  = document.getElementById(id);
     if (t) t.classList.add("frai-visible");
     _scrollBottom();
 }
 
 function _hideTyping() {
-    var t = document.getElementById("frai-typing");
+    var id = FRAI.activeTab === "coding" ? "frai-typing-coding" : "frai-typing";
+    var t  = document.getElementById(id);
     if (t) t.classList.remove("frai-visible");
 }
 
 function _scrollBottom() {
     var msgs = _getActiveMsgs();
     if (msgs) msgs.scrollTop = msgs.scrollHeight;
+}
+
+
+// ════════════════════════════════════════════════════════════════
+// CODING AGENT
+// ════════════════════════════════════════════════════════════════
+
+function _showCodingWelcome() {
+    var chips = [
+        "Add a GSTIN field to Customer",
+        "Add a 'Priority' select field to Sales Order",
+        "Create a workflow for Purchase Order approval",
+        "Validate that email is filled on Customer save",
+    ];
+    _addBubble(
+        "I'm the <strong>Coding Agent</strong>. I can make real changes to your ERPNext — " +
+        "adding custom fields, writing server/client scripts, or building approval workflows.<br><br>" +
+        "Every change goes through a <strong>Review &rarr; Confirm</strong> step before anything is applied.",
+        "frai-agent",
+        chips
+    );
+}
+
+function sendCodingMessage() {
+    var input = document.getElementById("frai-input");
+    if (!input) return;
+
+    var text = input.value.trim();
+    if (!text) return;
+
+    input.value = "";
+    input.style.height = "auto";
+
+    _removeAllChips();
+    _addBubble(text, "frai-user");
+    _showTyping();
+    FRAI.sending = true;
+
+    // Snapshot context at send time
+    var sendDoctype = FRAI.doctype || "";
+    var sendDocname = FRAI.docname || "";
+
+    frappe.call({
+        method: "frappe_ai_assistant.api.coding_agent.chat",
+        args: {
+            message: text,
+            doctype: sendDoctype,
+            docname: sendDocname,
+        },
+        callback: function (r) {
+            FRAI.sending = false;
+            _hideTyping();
+            if (!r || !r.message) {
+                _addBubble("No response received.", "frai-error");
+                return;
+            }
+            var data = r.message;
+            if (data.preview) {
+                _showPreviewCard(data.reply, data.preview);
+            } else {
+                _addBubble(data.reply || "—", "frai-agent");
+            }
+        },
+        error: function (err) {
+            FRAI.sending = false;
+            _hideTyping();
+            _addBubble(
+                "Server error. Check that <code>groq_api_key</code> is set in site_config.json.",
+                "frai-error"
+            );
+            console.error("[Frappe AI] coding error:", err);
+        },
+    });
+}
+
+function _showPreviewCard(previewHtml, preview) {
+    var msgs = document.getElementById("frai-messages-coding");
+    if (!msgs) return;
+
+    FRAI.pendingSessionKey = preview.session_key;
+
+    var card = document.createElement("div");
+    card.className = "frai-preview-card";
+
+    var body = document.createElement("div");
+    body.className = "frai-preview-body";
+    body.innerHTML = previewHtml;
+
+    var actions = document.createElement("div");
+    actions.className = "frai-preview-actions";
+
+    var applyBtn  = document.createElement("button");
+    applyBtn.className   = "frai-btn-apply";
+    applyBtn.textContent = "Apply Changes";
+
+    var cancelBtn = document.createElement("button");
+    cancelBtn.className   = "frai-btn-cancel";
+    cancelBtn.textContent = "Cancel";
+
+    actions.appendChild(applyBtn);
+    actions.appendChild(cancelBtn);
+
+    card.innerHTML = "<h4>Review Changes</h4>";
+    card.appendChild(body);
+    card.appendChild(actions);
+
+    // Insert before the typing indicator
+    var typing = document.getElementById("frai-typing-coding");
+    if (typing && msgs.contains(typing)) {
+        msgs.insertBefore(card, typing);
+    } else {
+        msgs.appendChild(card);
+    }
+    msgs.scrollTop = msgs.scrollHeight;
+
+    applyBtn.addEventListener("click", function () {
+        applyBtn.disabled    = true;
+        cancelBtn.disabled   = true;
+        applyBtn.textContent = "Applying…";
+        _applyCodingChange(preview.session_key, card);
+    });
+
+    cancelBtn.addEventListener("click", function () {
+        card.remove();
+        FRAI.pendingSessionKey = null;
+        _addBubble("Change cancelled.", "frai-agent");
+    });
+}
+
+function _applyCodingChange(sessionKey, previewCard) {
+    frappe.call({
+        method: "frappe_ai_assistant.api.coding_agent.apply",
+        args:   { session_key: sessionKey },
+        callback: function (r) {
+            if (previewCard) previewCard.remove();
+            FRAI.pendingSessionKey = null;
+
+            if (!r || !r.message) {
+                _addBubble("Apply failed — no response from server.", "frai-error");
+                return;
+            }
+            var data = r.message;
+            if (data.success) {
+                _showSuccessCard(data.result, data.change_log);
+            } else {
+                _addBubble("Apply failed: " + (data.error || "unknown error"), "frai-error");
+            }
+        },
+        error: function () {
+            if (previewCard) previewCard.remove();
+            FRAI.pendingSessionKey = null;
+            _addBubble("Apply failed — server error.", "frai-error");
+        },
+    });
+}
+
+function _showSuccessCard(result, changeLogName) {
+    var msgs = document.getElementById("frai-messages-coding");
+    if (!msgs) return;
+
+    var card = document.createElement("div");
+    card.className = "frai-success-card";
+    card.innerHTML =
+        "<h4>Applied Successfully</h4>" +
+        "<div>" + (result.doctype || "") + ": <strong>" + (result.name || result.label || "") + "</strong>" +
+        (result.target ? " on " + result.target : "") + "</div>";
+
+    if (changeLogName) {
+        var rollbackBtn = document.createElement("button");
+        rollbackBtn.className   = "frai-rollback-link";
+        rollbackBtn.textContent = "Undo this change";
+        rollbackBtn.addEventListener("click", function () {
+            rollbackBtn.textContent = "Undoing…";
+            rollbackBtn.disabled    = true;
+            _rollbackChange(changeLogName, card);
+        });
+        card.appendChild(rollbackBtn);
+    }
+
+    var reloadBtn = document.createElement("button");
+    reloadBtn.className   = "frai-rollback-link";
+    reloadBtn.textContent = "Reload page to see changes";
+    reloadBtn.style.marginLeft = changeLogName ? "12px" : "0";
+    reloadBtn.addEventListener("click", function () { window.location.reload(); });
+    card.appendChild(reloadBtn);
+
+    var typing = document.getElementById("frai-typing-coding");
+    if (typing && msgs.contains(typing)) {
+        msgs.insertBefore(card, typing);
+    } else {
+        msgs.appendChild(card);
+    }
+    msgs.scrollTop = msgs.scrollHeight;
+}
+
+function _rollbackChange(changeLogName, successCard) {
+    frappe.call({
+        method: "frappe_ai_assistant.api.coding_agent.rollback",
+        args:   { change_log_name: changeLogName },
+        callback: function (r) {
+            if (successCard) successCard.remove();
+            var data = r && r.message;
+            if (data && data.success) {
+                _addBubble("Rolled back: " + (data.message || changeLogName), "frai-agent");
+            } else {
+                _addBubble(
+                    "Rollback failed: " + (data && data.error || "unknown error"),
+                    "frai-error"
+                );
+            }
+        },
+        error: function () {
+            if (successCard) successCard.remove();
+            _addBubble("Rollback failed — server error.", "frai-error");
+        },
+    });
 }

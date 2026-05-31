@@ -1,0 +1,117 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "hash",
+ "creation": "2026-05-31 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "user",
+  "change_type",
+  "change_type_raw",
+  "target_doctype",
+  "change_name",
+  "status",
+  "column_break_1",
+  "applied_at",
+  "section_break_payload",
+  "payload",
+  "section_break_rollback",
+  "rollback_payload"
+ ],
+ "fields": [
+  {
+   "fieldname": "user",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "User",
+   "options": "User",
+   "reqd": 1
+  },
+  {
+   "fieldname": "change_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Change Type",
+   "options": "Custom Field\nServer Script\nClient Script\nWorkflow\nDocType\nDocuments"
+  },
+  {
+   "fieldname": "change_type_raw",
+   "fieldtype": "Data",
+   "label": "Change Type Raw"
+  },
+  {
+   "fieldname": "target_doctype",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Target DocType"
+  },
+  {
+   "fieldname": "change_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Change Name"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Status",
+   "options": "Applied\nRolled Back"
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "applied_at",
+   "fieldtype": "Datetime",
+   "label": "Applied At"
+  },
+  {
+   "fieldname": "section_break_payload",
+   "fieldtype": "Section Break",
+   "label": "Payload"
+  },
+  {
+   "fieldname": "payload",
+   "fieldtype": "Long Text",
+   "label": "Payload (JSON)"
+  },
+  {
+   "fieldname": "section_break_rollback",
+   "fieldtype": "Section Break",
+   "label": "Rollback Info"
+  },
+  {
+   "fieldname": "rollback_payload",
+   "fieldtype": "Long Text",
+   "label": "Rollback Payload (JSON)"
+  }
+ ],
+ "links": [],
+ "modified": "2026-05-31 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Frappe Ai Assistant",
+ "name": "AI Change Log",
+ "naming_rule": "Random",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 0,
+   "export": 1,
+   "print": 0,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 0,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 0
+}
