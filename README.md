@@ -4,7 +4,7 @@ An AI-powered assistant embedded natively inside ERPNext as a Frappe custom app.
 
 Built in two phases: a **Guide Agent** that teaches ERPNext to non-technical users, and a **Coding Agent** that makes real, validated changes to the system from plain English prompts.
 
-![Frappe AI Assistant Sidebar](./docs/screenshot.png)
+![Frappe AI Assistant Sidebar](screenshot_ai.png)
 
 ---
 
