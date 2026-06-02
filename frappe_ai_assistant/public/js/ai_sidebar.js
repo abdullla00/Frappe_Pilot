@@ -1,21 +1,53 @@
 // ============================================================
-// ai_sidebar.js
-// Place at: frappe_ai_assistant/frappe_ai_assistant/public/js/ai_sidebar.js
+// ai_sidebar.js — Forge AI Assistant
 // ============================================================
 
 var FRAI = {
-    isOpen:      false,
-    activeTab:   "guide",
-    doctype:     null,
-    docname:     null,
-    isNew:       false,
-    route:       "",
-    listDoctype: null,
-    sending:     false,
-    panelWidth:  340,
-    isResizing:  false,
-    pendingSessionKey: null,   // coding agent: staged change awaiting confirm
+    isOpen:            false,
+    activeTab:         "guide",
+    doctype:           null,
+    docname:           null,
+    isNew:             false,
+    route:             "",
+    listDoctype:       null,
+    sending:           false,
+    panelWidth:        360,
+    isResizing:        false,
+    pendingSessionKey: null,
+    codingHistory:     [],
 };
+
+var TOOL_LABELS = {
+    "create_custom_field":  "CUSTOM FIELD",
+    "create_server_script": "SERVER SCRIPT",
+    "create_client_script": "CLIENT SCRIPT",
+    "create_workflow":      "WORKFLOW",
+    "create_doctype":       "DOCTYPE",
+    "create_documents":     "RECORDS",
+};
+
+var POST_APPLY_SUGGESTIONS = {
+    "create_custom_field":  "Want me to add a validation script for this field?",
+    "create_server_script": "Want me to add a matching client-side trigger?",
+    "create_client_script": "Want me to add server-side validation too?",
+    "create_workflow":      "Want me to set up email alerts for each state change?",
+    "create_doctype":       "Want me to seed it with some sample records?",
+    "create_documents":     "Want me to create a list report for these records?",
+};
+
+var CODING_TYPING_LABELS = ["Thinking…", "Reading schema…", "Preparing change…", "Validating…"];
+var GUIDE_TYPING_LABELS  = ["Thinking…", "Searching docs…", "Preparing answer…"];
+
+var HISTORY_BADGE_MAP = {
+    "DocType":       { cls: "frai-hb-doctype",   label: "DocType"  },
+    "Custom Field":  { cls: "frai-hb-field",      label: "Field"    },
+    "Server Script": { cls: "frai-hb-script",     label: "Script"   },
+    "Client Script": { cls: "frai-hb-script",     label: "Script"   },
+    "Workflow":      { cls: "frai-hb-workflow",   label: "Workflow" },
+    "Documents":     { cls: "frai-hb-documents",  label: "Records"  },
+};
+
+var _typingLabelTimers = {};
 
 $(document).ready(function () {
     _injectCSS();
@@ -23,7 +55,6 @@ $(document).ready(function () {
     _bindEvents();
     _bindResizeEvents();
     _scheduleContextCheck();
-    console.log("[Frappe AI] Sidebar ready.");
 });
 
 
@@ -35,6 +66,7 @@ function _injectCSS() {
     style.id = "frai-styles";
     style.textContent = `
 
+/* ── Trigger (right-edge tab, Frappe-native) ── */
 #frai-trigger {
     position: fixed;
     right: 0;
@@ -44,31 +76,27 @@ function _injectCSS() {
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 10px 8px 10px 12px;
+    padding: 10px 8px 10px 10px;
     background: var(--fg-color, #fff);
     border: 1px solid var(--border-color, #d1d8dd);
     border-right: none;
     border-radius: 8px 0 0 8px;
     cursor: pointer;
     box-shadow: -2px 0 8px rgba(0,0,0,.06);
-    transition: padding .18s ease, box-shadow .18s ease, right .22s cubic-bezier(.4,0,.2,1);
+    transition: padding .16s ease, box-shadow .16s ease, right .2s cubic-bezier(.4,0,.2,1);
     user-select: none;
 }
 #frai-trigger:hover {
-    padding-left: 16px;
-    box-shadow: -3px 0 14px rgba(0,0,0,.10);
+    padding-left: 14px;
+    box-shadow: -3px 0 12px rgba(0,0,0,.09);
 }
+#frai-trigger.frai-resizing { transition: none !important; }
 #frai-trigger-dot {
-    width: 8px;
-    height: 8px;
+    width: 7px;
+    height: 7px;
     border-radius: 50%;
-    background: var(--primary, #2490ef);
+    background: #2490ef;
     flex-shrink: 0;
-    animation: frai-pulse 2.4s infinite;
-}
-@keyframes frai-pulse {
-    0%,100% { opacity:1; transform:scale(1); }
-    50%      { opacity:.5; transform:scale(.75); }
 }
 #frai-trigger-label {
     font-size: 11px;
@@ -81,12 +109,11 @@ function _injectCSS() {
     white-space: nowrap;
 }
 
+/* ── Resize handle ── */
 #frai-resize-handle {
     position: absolute;
-    left: 0;
-    top: 0;
-    width: 5px;
-    height: 100%;
+    left: 0; top: 0;
+    width: 5px; height: 100%;
     cursor: ew-resize;
     z-index: 10;
     background: transparent;
@@ -95,55 +122,54 @@ function _injectCSS() {
 #frai-resize-handle:hover,
 #frai-resize-handle.frai-dragging {
     background: var(--primary, #2490ef);
-    opacity: .35;
+    opacity: .25;
 }
 
+/* ── Panel ── */
 #frai-panel {
     position: fixed;
-    top: 0;
-    right: 0;
+    top: 0; right: 0;
     height: 100dvh;
-    width: 340px;
-    min-width: 260px;
-    max-width: 600px;
+    width: 360px;
+    min-width: 280px;
+    max-width: 640px;
     z-index: 1049;
     display: flex;
     flex-direction: column;
     background: var(--fg-color, #fff);
     border-left: 1px solid var(--border-color, #d1d8dd);
-    box-shadow: -6px 0 24px rgba(0,0,0,.08);
+    box-shadow: -4px 0 20px rgba(0,0,0,.07);
     transform: translateX(100%);
     transition: transform .22s cubic-bezier(.4,0,.2,1);
     overflow: hidden;
 }
-#frai-panel.frai-open { transform: translateX(0); }
+#frai-panel.frai-open     { transform: translateX(0); }
 #frai-panel.frai-resizing { transition: none; }
 
+/* ── Header (light, Frappe-native) ── */
 #frai-header {
     flex-shrink: 0;
-    padding: 14px 14px 0;
+    padding: 12px 14px 0;
     background: var(--fg-color, #fff);
     border-bottom: 1px solid var(--border-color, #d1d8dd);
 }
 #frai-header-row {
     display: flex;
     align-items: center;
-    gap: 9px;
+    gap: 8px;
     margin-bottom: 10px;
 }
 #frai-icon-wrap {
-    width: 30px;
-    height: 30px;
-    border-radius: 8px;
-    background: var(--primary-light, #e8f3fd);
+    width: 28px; height: 28px;
+    border-radius: 6px;
+    background: var(--primary-light, #e4f2ff);
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
 }
 #frai-icon-wrap svg {
-    width: 16px;
-    height: 16px;
+    width: 15px; height: 15px;
     stroke: var(--primary, #2490ef);
     fill: none;
     stroke-width: 2;
@@ -157,6 +183,19 @@ function _injectCSS() {
     color: var(--text-color, #36414c);
     line-height: 1.2;
 }
+#frai-version {
+    display: inline-block;
+    font-size: 9px;
+    font-weight: 500;
+    color: var(--text-muted, #8d99a6);
+    background: var(--control-bg, #f4f5f6);
+    border: 1px solid var(--border-color, #d1d8dd);
+    border-radius: 4px;
+    padding: 1px 5px;
+    margin-left: 5px;
+    vertical-align: middle;
+    letter-spacing: 0.03em;
+}
 #frai-subtitle {
     font-size: 11px;
     color: var(--text-muted, #8d99a6);
@@ -166,8 +205,7 @@ function _injectCSS() {
     text-overflow: ellipsis;
 }
 #frai-close {
-    width: 26px;
-    height: 26px;
+    width: 26px; height: 26px;
     border-radius: 6px;
     border: none;
     background: transparent;
@@ -179,13 +217,14 @@ function _injectCSS() {
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    transition: background .12s;
+    transition: background .12s, color .12s;
 }
 #frai-close:hover {
     background: var(--control-bg, #f4f5f6);
     color: var(--text-color, #36414c);
 }
 
+/* ── Tabs (light background, Frappe-native) ── */
 #frai-tabs {
     display: flex;
     margin: 0 -14px;
@@ -212,6 +251,7 @@ function _injectCSS() {
     font-weight: 600;
 }
 
+/* ── Body + panes ── */
 #frai-body {
     flex: 1;
     display: flex;
@@ -226,6 +266,7 @@ function _injectCSS() {
 }
 .frai-tab-pane.frai-pane-active { display: flex; }
 
+/* ── Messages area ── */
 .frai-messages-area {
     flex: 1;
     overflow-y: auto;
@@ -242,6 +283,7 @@ function _injectCSS() {
     border-radius: 4px;
 }
 
+/* ── Bubbles ── */
 .frai-bubble {
     max-width: 90%;
     padding: 9px 12px;
@@ -272,15 +314,10 @@ function _injectCSS() {
     align-self: flex-start;
     background: var(--red-highlight-color, #fff5f5);
     color: var(--red, #e74c3c);
-    border: 1px solid var(--red-highlight-color, #fbd5d5);
-}
-.frai-bubble.frai-disabled {
-    align-self: flex-start;
-    background: var(--yellow-highlight-color, #fffbe6);
-    color: var(--text-color, #36414c);
-    border: 1px solid var(--yellow-avatar-bg, #fde68a);
+    border: 1px solid #fbd5d5;
 }
 
+/* ── Chips (guide tab) ── */
 .frai-chips {
     display: flex;
     flex-wrap: wrap;
@@ -302,39 +339,91 @@ function _injectCSS() {
 .frai-chip:hover {
     border-color: var(--primary, #2490ef);
     color: var(--primary, #2490ef);
-    background: var(--primary-light, #e8f3fd);
+    background: var(--primary-light, #e4f2ff);
 }
 
+/* ── Capability grid (coding welcome) ── */
+.frai-cap-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 7px;
+    padding: 0 12px 12px;
+    animation: frai-in .18s ease;
+}
+.frai-cap-card {
+    background: var(--fg-color, #fff);
+    border: 1px solid var(--border-color, #d1d8dd);
+    border-radius: 8px;
+    padding: 10px;
+    cursor: pointer;
+    transition: border-color .13s, box-shadow .13s, transform .12s;
+    text-align: left;
+}
+.frai-cap-card:hover {
+    border-color: var(--primary, #2490ef);
+    box-shadow: 0 2px 8px rgba(36,144,239,0.12);
+    transform: translateY(-1px);
+}
+.frai-cap-icon {
+    font-size: 18px;
+    display: block;
+    margin-bottom: 5px;
+    line-height: 1;
+}
+.frai-cap-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-color, #36414c);
+    display: block;
+}
+.frai-cap-desc {
+    font-size: 10.5px;
+    color: var(--text-muted, #8d99a6);
+    display: block;
+    margin-top: 2px;
+    line-height: 1.4;
+}
+
+/* ── Typing indicator ── */
 #frai-typing,
 #frai-typing-coding {
     display: none;
     align-self: flex-start;
-    gap: 5px;
+    gap: 4px;
     align-items: center;
-    padding: 10px 14px;
+    padding: 9px 12px;
     background: var(--control-bg, #f4f5f6);
     border: 1px solid var(--border-color, #d1d8dd);
     border-radius: 4px 10px 10px 10px;
 }
 #frai-typing.frai-visible,
 #frai-typing-coding.frai-visible { display: flex; }
-#frai-typing span,
-#frai-typing-coding span {
-    width: 5px;
-    height: 5px;
+#frai-typing i,
+#frai-typing-coding i {
+    display: inline-block;
+    width: 5px; height: 5px;
     border-radius: 50%;
     background: var(--text-muted, #8d99a6);
     animation: frai-dot .9s infinite;
+    flex-shrink: 0;
 }
-#frai-typing span:nth-child(2),
-#frai-typing-coding span:nth-child(2) { animation-delay: .15s; }
-#frai-typing span:nth-child(3),
-#frai-typing-coding span:nth-child(3) { animation-delay: .3s; }
+#frai-typing i:nth-child(2),
+#frai-typing-coding i:nth-child(2) { animation-delay: .15s; }
+#frai-typing i:nth-child(3),
+#frai-typing-coding i:nth-child(3) { animation-delay: .3s; }
 @keyframes frai-dot {
     0%,80%,100% { transform:scale(.7); opacity:.4; }
     40%          { transform:scale(1);  opacity:1; }
 }
+.frai-typing-label {
+    font-size: 11px;
+    color: var(--text-muted, #8d99a6);
+    margin-left: 6px;
+    font-style: italic;
+    transition: opacity .3s;
+}
 
+/* ── Footer ── */
 #frai-footer {
     flex-shrink: 0;
     padding: 10px 12px;
@@ -365,8 +454,7 @@ function _injectCSS() {
 }
 #frai-input::placeholder { color: var(--text-muted, #8d99a6); }
 #frai-send {
-    width: 34px;
-    height: 34px;
+    width: 34px; height: 34px;
     border-radius: 8px;
     border: none;
     background: var(--primary, #2490ef);
@@ -381,8 +469,7 @@ function _injectCSS() {
 #frai-send:hover  { background: var(--primary-dark, #1a73c8); }
 #frai-send:active { transform: scale(.93); }
 #frai-send svg {
-    width: 15px;
-    height: 15px;
+    width: 15px; height: 15px;
     fill: none;
     stroke: #fff;
     stroke-width: 2.5;
@@ -394,27 +481,33 @@ body.frai-is-resizing * {
     user-select: none !important;
 }
 
-/* ── Coding Agent: preview card ── */
+/* ── Preview card (staged, amber tint) ── */
 .frai-preview-card {
     align-self: flex-start;
     width: 94%;
-    background: #f0f9ff;
-    border: 1px solid #bae6fd;
-    border-radius: 4px 10px 10px 10px;
+    background: #fffdf5;
+    border: 1px solid #fde68a;
+    border-radius: 8px;
     padding: 12px;
     font-size: 12px;
-    line-height: 1.6;
+    line-height: 1.65;
     animation: frai-in .15s ease;
 }
-.frai-preview-card h4 {
-    font-size: 11.5px;
+.frai-preview-badge {
+    display: inline-block;
+    font-size: 9.5px;
     font-weight: 700;
-    color: #0369a1;
-    margin: 0 0 8px 0;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #92400e;
+    background: #fef3c7;
+    border-radius: 4px;
+    padding: 2px 7px;
+    margin-bottom: 8px;
 }
 .frai-preview-body {
     color: var(--text-color, #36414c);
-    margin-bottom: 10px;
+    margin-bottom: 2px;
 }
 .frai-preview-body ul {
     margin: 4px 0;
@@ -423,16 +516,18 @@ body.frai-is-resizing * {
 .frai-preview-body pre {
     font-size: 10.5px;
     white-space: pre-wrap;
-    background: #fff;
-    padding: 6px 8px;
-    border-radius: 4px;
-    border: 1px solid #e2e8f0;
-    margin: 4px 0;
+    background: #1a1f2e;
+    color: #e2e8f0;
+    padding: 8px 10px;
+    border-radius: 6px;
+    margin: 6px 0;
     overflow-x: auto;
+    line-height: 1.5;
 }
 .frai-preview-actions {
     display: flex;
     gap: 6px;
+    margin-top: 10px;
 }
 .frai-btn-apply {
     flex: 1;
@@ -460,36 +555,204 @@ body.frai-is-resizing * {
 }
 .frai-btn-cancel:hover { background: var(--control-bg, #f4f5f6); }
 
-/* ── Coding Agent: success card ── */
+/* ── Success card (green tint + checkmark) ── */
 .frai-success-card {
     align-self: flex-start;
     width: 94%;
-    background: #f0fdf4;
-    border: 1px solid #bbf7d0;
-    border-radius: 4px 10px 10px 10px;
+    background: #f6ffed;
+    border: 1px solid #b7eb8f;
+    border-radius: 8px;
     padding: 12px;
     font-size: 12px;
     line-height: 1.6;
     animation: frai-in .15s ease;
 }
-.frai-success-card h4 {
-    font-size: 11.5px;
+.frai-success-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 5px;
+}
+.frai-check-circle {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: #16a34a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.frai-check-svg { width: 11px; height: 11px; }
+.frai-check-path {
+    stroke: #fff;
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    fill: none;
+    stroke-dasharray: 20;
+    stroke-dashoffset: 20;
+    animation: frai-check-draw 0.4s ease forwards 0.15s;
+}
+@keyframes frai-check-draw {
+    to { stroke-dashoffset: 0; }
+}
+.frai-success-title {
+    font-size: 12px;
     font-weight: 700;
     color: #15803d;
-    margin: 0 0 4px 0;
 }
-.frai-rollback-link {
+.frai-success-detail {
+    font-size: 11.5px;
+    color: var(--text-color, #36414c);
+    margin-bottom: 6px;
+}
+.frai-suggestion-pill {
     display: inline-block;
-    margin-top: 6px;
     font-size: 11px;
-    color: var(--text-muted, #8d99a6);
-    text-decoration: underline;
+    padding: 4px 10px;
+    border-radius: 20px;
+    border: 1px dashed var(--primary, #2490ef);
+    color: var(--primary, #2490ef);
+    background: var(--primary-light, #e4f2ff);
     cursor: pointer;
-    background: none;
-    border: none;
-    padding: 0;
+    margin-top: 2px;
+    margin-bottom: 6px;
+    transition: background .12s;
+    line-height: 1.5;
 }
-.frai-rollback-link:hover { color: var(--red, #e74c3c); }
+.frai-suggestion-pill:hover { background: #d0e8fa; }
+.frai-success-actions {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid #b7eb8f;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+.frai-btn-reload {
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 5px;
+    border: 1px solid #bbf7d0;
+    background: #fff;
+    color: #15803d;
+    cursor: pointer;
+    transition: background .12s;
+}
+.frai-btn-reload:hover { background: #dcfce7; }
+.frai-btn-undo {
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 5px;
+    border: 1px solid var(--border-color, #d1d8dd);
+    background: transparent;
+    color: var(--text-muted, #8d99a6);
+    cursor: pointer;
+    transition: color .12s, border-color .12s;
+}
+.frai-btn-undo:hover:not(:disabled) {
+    color: var(--red, #e74c3c);
+    border-color: var(--red, #e74c3c);
+}
+.frai-btn-undo:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* ── History tab ── */
+.frai-history-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.frai-history-list::-webkit-scrollbar { width: 4px; }
+.frai-history-list::-webkit-scrollbar-track { background: transparent; }
+.frai-history-list::-webkit-scrollbar-thumb {
+    background: var(--border-color, #d1d8dd);
+    border-radius: 4px;
+}
+.frai-history-empty {
+    text-align: center;
+    padding: 40px 16px;
+    color: var(--text-muted, #8d99a6);
+    font-size: 12.5px;
+    line-height: 1.6;
+}
+.frai-history-empty svg {
+    display: block;
+    margin: 0 auto 12px;
+    opacity: 0.28;
+}
+.frai-history-loading {
+    text-align: center;
+    padding: 30px;
+    color: var(--text-muted, #8d99a6);
+    font-size: 12px;
+}
+.frai-history-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 10px;
+    border: 1px solid var(--border-color, #d1d8dd);
+    border-radius: 8px;
+    font-size: 12px;
+    animation: frai-in .12s ease;
+}
+.frai-history-item.frai-rolled-back { opacity: 0.48; }
+.frai-history-badge {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    padding: 2px 6px;
+    border-radius: 4px;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+.frai-hb-doctype   { background: #e0e7ff; color: #3730a3; }
+.frai-hb-field     { background: #fef3c7; color: #b45309; }
+.frai-hb-script    { background: #f0fdf4; color: #15803d; }
+.frai-hb-workflow  { background: #fdf4ff; color: #7e22ce; }
+.frai-hb-documents { background: #f0f9ff; color: #0369a1; }
+.frai-history-info {
+    flex: 1;
+    min-width: 0;
+}
+.frai-history-name {
+    font-weight: 500;
+    color: var(--text-color, #36414c);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.frai-history-meta {
+    font-size: 10.5px;
+    color: var(--text-muted, #8d99a6);
+    margin-top: 1px;
+}
+.frai-history-undo-btn {
+    flex-shrink: 0;
+    font-size: 11px;
+    padding: 3px 9px;
+    border-radius: 5px;
+    border: 1px solid var(--border-color, #d1d8dd);
+    background: transparent;
+    color: var(--text-muted, #8d99a6);
+    cursor: pointer;
+    transition: color .12s, border-color .12s;
+}
+.frai-history-undo-btn:hover:not(:disabled) {
+    color: var(--red, #e74c3c);
+    border-color: var(--red, #e74c3c);
+}
+.frai-history-undo-btn:disabled { opacity: 0.42; cursor: not-allowed; }
+.frai-history-rolled-label {
+    font-size: 10px;
+    color: var(--text-muted, #8d99a6);
+    font-style: italic;
+    flex-shrink: 0;
+}
     `;
     document.head.appendChild(style);
 }
@@ -502,16 +765,16 @@ function _buildDOM() {
 
     var trigger = document.createElement("div");
     trigger.id = "frai-trigger";
-    trigger.setAttribute("title", "Open AI Assistant (Alt+A)");
+    trigger.setAttribute("title", "Open Forge AI (Alt+A)");
     trigger.innerHTML =
         '<div id="frai-trigger-dot"></div>' +
-        '<span id="frai-trigger-label">AI</span>';
+        '<span id="frai-trigger-label">Forge</span>';
     document.body.appendChild(trigger);
 
     var panel = document.createElement("div");
     panel.id = "frai-panel";
     panel.setAttribute("role", "complementary");
-    panel.setAttribute("aria-label", "AI Assistant");
+    panel.setAttribute("aria-label", "Forge AI Assistant");
     panel.innerHTML =
 
         '<div id="frai-resize-handle" title="Drag to resize"></div>' +
@@ -525,14 +788,15 @@ function _buildDOM() {
                     '</svg>' +
                 '</div>' +
                 '<div id="frai-title-wrap">' +
-                    '<div id="frai-title">AI Assistant</div>' +
-                    '<div id="frai-subtitle">Loading...</div>' +
+                    '<div id="frai-title">Forge <span id="frai-version">v1.0</span></div>' +
+                    '<div id="frai-subtitle">Loading…</div>' +
                 '</div>' +
                 '<button id="frai-close" aria-label="Close">&#10005;</button>' +
             '</div>' +
             '<div id="frai-tabs">' +
                 '<button class="frai-tab frai-tab-active" data-tab="guide">Guide</button>' +
-                '<button class="frai-tab" data-tab="coding">Coding Agent</button>' +
+                '<button class="frai-tab" data-tab="coding">Build</button>' +
+                '<button class="frai-tab" data-tab="history">History</button>' +
             '</div>' +
         '</div>' +
 
@@ -540,13 +804,23 @@ function _buildDOM() {
 
             '<div id="frai-pane-guide" class="frai-tab-pane frai-pane-active">' +
                 '<div id="frai-messages-guide" class="frai-messages-area">' +
-                    '<div id="frai-typing"><span></span><span></span><span></span></div>' +
+                    '<div id="frai-typing"><i></i><i></i><i></i>' +
+                        '<span class="frai-typing-label">Thinking…</span>' +
+                    '</div>' +
                 '</div>' +
             '</div>' +
 
             '<div id="frai-pane-coding" class="frai-tab-pane">' +
                 '<div id="frai-messages-coding" class="frai-messages-area">' +
-                    '<div id="frai-typing-coding"><span></span><span></span><span></span></div>' +
+                    '<div id="frai-typing-coding"><i></i><i></i><i></i>' +
+                        '<span class="frai-typing-label">Thinking…</span>' +
+                    '</div>' +
+                '</div>' +
+            '</div>' +
+
+            '<div id="frai-pane-history" class="frai-tab-pane">' +
+                '<div id="frai-history-list" class="frai-history-list">' +
+                    '<div class="frai-history-loading">Loading…</div>' +
                 '</div>' +
             '</div>' +
 
@@ -554,7 +828,7 @@ function _buildDOM() {
 
         '<div id="frai-footer">' +
             '<textarea id="frai-input" rows="1" ' +
-                'placeholder="Ask anything about ERPNext..." ' +
+                'placeholder="Ask anything about ERPNext…" ' +
                 'aria-label="Message input"></textarea>' +
             '<button id="frai-send" aria-label="Send">' +
                 '<svg viewBox="0 0 24 24">' +
@@ -572,15 +846,16 @@ function _buildDOM() {
 // RESIZE
 // ════════════════════════════════════════════════════════════════
 function _bindResizeEvents() {
-    var handle  = document.getElementById("frai-resize-handle");
-    var panel   = document.getElementById("frai-panel");
-    var trigger = document.getElementById("frai-trigger");
-    if (!handle || !panel || !trigger) return;
+    var handle = document.getElementById("frai-resize-handle");
+    var panel  = document.getElementById("frai-panel");
+    if (!handle || !panel) return;
 
     handle.addEventListener("mousedown", function (e) {
         e.preventDefault();
+        var trigger = document.getElementById("frai-trigger");
         FRAI.isResizing = true;
         panel.classList.add("frai-resizing");
+        if (trigger) trigger.classList.add("frai-resizing");
         handle.classList.add("frai-dragging");
         document.body.classList.add("frai-is-resizing");
 
@@ -589,7 +864,7 @@ function _bindResizeEvents() {
 
         function onMouseMove(e) {
             if (!FRAI.isResizing) return;
-            var newWidth = Math.min(600, Math.max(260, startWidth + (startX - e.clientX)));
+            var newWidth = Math.min(640, Math.max(280, startWidth + (startX - e.clientX)));
             FRAI.panelWidth = newWidth;
             panel.style.width   = newWidth + "px";
             trigger.style.right = newWidth + "px";
@@ -597,6 +872,7 @@ function _bindResizeEvents() {
         function onMouseUp() {
             FRAI.isResizing = false;
             panel.classList.remove("frai-resizing");
+            trigger.classList.remove("frai-resizing");
             handle.classList.remove("frai-dragging");
             document.body.classList.remove("frai-is-resizing");
             document.removeEventListener("mousemove", onMouseMove);
@@ -669,11 +945,11 @@ function openPanel() {
     FRAI.isOpen = true;
     var panel   = document.getElementById("frai-panel");
     var trigger = document.getElementById("frai-trigger");
-    if (!panel || !trigger) return;
+    if (!panel) return;
 
     panel.style.width = FRAI.panelWidth + "px";
     panel.classList.add("frai-open");
-    trigger.style.right = FRAI.panelWidth + "px";
+    if (trigger) trigger.style.right = FRAI.panelWidth + "px";
 
     var guideMsgs = document.getElementById("frai-messages-guide");
     if (guideMsgs && guideMsgs.querySelectorAll(".frai-bubble").length === 0) {
@@ -694,7 +970,7 @@ function closePanel() {
 
 
 // ════════════════════════════════════════════════════════════════
-// TAB SWITCHING — each tab keeps its own history
+// TAB SWITCHING
 // ════════════════════════════════════════════════════════════════
 function switchTab(tab) {
     FRAI.activeTab = tab;
@@ -708,11 +984,20 @@ function switchTab(tab) {
     var activePane = document.getElementById("frai-pane-" + tab);
     if (activePane) activePane.classList.add("frai-pane-active");
 
+    var footer = document.getElementById("frai-footer");
     var input  = document.getElementById("frai-input");
     var sendEl = document.getElementById("frai-send");
 
+    if (tab === "history") {
+        if (footer) footer.style.display = "none";
+        _loadHistory();
+        return;
+    }
+
+    if (footer) footer.style.display = "flex";
+
     if (tab === "guide") {
-        if (input)  { input.placeholder = "Ask anything about ERPNext..."; input.disabled = false; }
+        if (input)  { input.placeholder = "Ask anything about ERPNext…"; input.disabled = false; }
         if (sendEl) sendEl.disabled = false;
         var guideMsgs = document.getElementById("frai-messages-guide");
         if (guideMsgs && guideMsgs.querySelectorAll(".frai-bubble").length === 0) {
@@ -720,7 +1005,7 @@ function switchTab(tab) {
         }
 
     } else if (tab === "coding") {
-        if (input)  { input.placeholder = "Tell me what to add or change in ERPNext..."; input.disabled = false; }
+        if (input)  { input.placeholder = "Tell me what to build or change in ERPNext…"; input.disabled = false; }
         if (sendEl) sendEl.disabled = false;
         var codingMsgs = document.getElementById("frai-messages-coding");
         if (codingMsgs && codingMsgs.querySelectorAll(".frai-bubble, .frai-preview-card, .frai-success-card").length === 0) {
@@ -731,14 +1016,13 @@ function switchTab(tab) {
 
 
 // ════════════════════════════════════════════════════════════════
-// CONTEXT DETECTION — reads the live Frappe page accurately
+// CONTEXT DETECTION
 // ════════════════════════════════════════════════════════════════
 function _updateContext() {
     var subtitle = document.getElementById("frai-subtitle");
     if (!subtitle) return;
 
     if (frappe.cur_frm) {
-        // ── On a document form ───────────────────────────────
         FRAI.doctype     = frappe.cur_frm.doctype;
         FRAI.docname     = frappe.cur_frm.docname;
         FRAI.isNew       = frappe.cur_frm.is_new();
@@ -755,70 +1039,45 @@ function _updateContext() {
         }
 
     } else {
-        // ── On list, report, module page, dashboard ──────────
         FRAI.doctype = null;
         FRAI.docname = null;
         FRAI.isNew   = false;
 
         var routeArr = [];
-
-        // frappe.get_route() is the most reliable — returns an array
         if (frappe.get_route) {
             try { routeArr = frappe.get_route() || []; } catch(e) { routeArr = []; }
         }
 
-        // Extract listDoctype from list views: ["List", "Customer", "List"]
         if (routeArr.length >= 2 && routeArr[0] === "List") {
             FRAI.listDoctype = routeArr[1];
         } else {
             FRAI.listDoctype = null;
         }
 
-        // Build route string
         var route = routeArr.length ? routeArr.join(" > ") : "";
-
-        // Fallback to get_route_str
         if (!route && frappe.get_route_str) {
             try { route = frappe.get_route_str() || ""; } catch(e) {}
         }
-
-        // Fallback to URL hash
         if (!route) {
             route = (window.location.hash || "").replace(/^#\/?/, "") || "Home";
         }
 
         FRAI.route = route;
         subtitle.textContent = _buildSubtitleLabel(routeArr, route);
-
-        console.log("[Frappe AI] Context →", {
-            routeArr:    routeArr,
-            route:       route,
-            listDoctype: FRAI.listDoctype
-        });
     }
 }
 
 function _buildSubtitleLabel(routeArr, route) {
     if (!routeArr.length && !route) return "Home";
-
-    // List view: ["List", "Customer", "List"] → "Customer List"
     if (routeArr[0] === "List" && routeArr[1]) return routeArr[1] + " List";
-
-    // Reports
     if ((routeArr[0] === "query-report" || routeArr[0] === "Report") && routeArr[1]) {
         return "Report: " + routeArr[1];
     }
-
-    // Module home (single item): ["Buying"] → "Buying Module"
     if (routeArr.length === 1) return routeArr[0] + " Module";
-
-    // Dashboard / Workspace
     if (routeArr[0] === "dashboard" || routeArr[0] === "Dashboard") return "Dashboard";
     if (routeArr[0] === "Workspaces" || routeArr[0] === "workspace") {
         return routeArr[1] ? routeArr[1] + " Workspace" : "Workspace";
     }
-
-    // Generic fallback
     return _routeToLabel(route);
 }
 
@@ -834,7 +1093,7 @@ function _routeToLabel(route) {
 
 
 // ════════════════════════════════════════════════════════════════
-// WELCOME — context-aware opening message + chips
+// GUIDE WELCOME
 // ════════════════════════════════════════════════════════════════
 function _showWelcome() {
     var chips = _getContextChips();
@@ -916,11 +1175,11 @@ function _getContextChips() {
 
 
 // ════════════════════════════════════════════════════════════════
-// SEND MESSAGE
+// SEND MESSAGE (router)
 // ════════════════════════════════════════════════════════════════
 function sendMessage() {
     if (FRAI.sending) return;
-    if (FRAI.activeTab === "coding") { sendCodingMessage(); return; }
+    if (FRAI.activeTab === "coding")  { sendCodingMessage(); return; }
     if (FRAI.activeTab !== "guide") return;
 
     var input = document.getElementById("frai-input");
@@ -936,7 +1195,6 @@ function sendMessage() {
     _showTyping();
     FRAI.sending = true;
 
-    // Refresh context right before sending — most accurate snapshot
     if (frappe.cur_frm) {
         FRAI.doctype     = frappe.cur_frm.doctype;
         FRAI.docname     = frappe.cur_frm.docname;
@@ -944,27 +1202,14 @@ function sendMessage() {
         FRAI.route       = "";
     }
 
-    var sendDoctype  = FRAI.doctype      || "";
-    var sendDocname  = FRAI.docname      || "";
-    var sendListDoc  = FRAI.listDoctype  || "";
-    var sendRoute    = FRAI.route        || "";
-
-    console.log("[Frappe AI] Sending →", {
-        doctype:      sendDoctype,
-        docname:      sendDocname,
-        list_doctype: sendListDoc,
-        route:        sendRoute,
-        message:      text
-    });
-
     frappe.call({
         method: "frappe_ai_assistant.api.guide.chat",
         args: {
             message:      text,
-            doctype:      sendDoctype,
-            docname:      sendDocname,
-            route:        sendRoute,
-            list_doctype: sendListDoc,
+            doctype:      FRAI.doctype      || "",
+            docname:      FRAI.docname      || "",
+            route:        FRAI.route        || "",
+            list_doctype: FRAI.listDoctype  || "",
             mode:         "guide"
         },
         callback: function (r) {
@@ -984,7 +1229,7 @@ function sendMessage() {
                 "is set in site_config.json and the app is installed.",
                 "frai-error"
             );
-            console.error("[Frappe AI] error:", err);
+            console.error("[Forge] guide error:", err);
         }
     });
 }
@@ -993,16 +1238,15 @@ function sendMessage() {
 // ════════════════════════════════════════════════════════════════
 // DOM HELPERS
 // ════════════════════════════════════════════════════════════════
-
 function _getActiveMsgs() {
-    return document.getElementById("frai-messages-" + FRAI.activeTab);
+    var tab = FRAI.activeTab === "history" ? "guide" : FRAI.activeTab;
+    return document.getElementById("frai-messages-" + tab);
 }
 
 function _addBubble(html, cssClass, chips) {
     var msgs   = _getActiveMsgs();
-    var typing = FRAI.activeTab === "coding"
-        ? document.getElementById("frai-typing-coding")
-        : document.getElementById("frai-typing");
+    var typingId = FRAI.activeTab === "coding" ? "frai-typing-coding" : "frai-typing";
+    var typing = document.getElementById(typingId);
     if (!msgs) return;
 
     var bubble = document.createElement("div");
@@ -1040,10 +1284,28 @@ function _removeAllChips() {
     document.querySelectorAll(".frai-chips").forEach(function (el) { el.remove(); });
 }
 
+function _removeCapGrid() {
+    var grid = document.querySelector(".frai-cap-grid");
+    if (grid) grid.remove();
+}
+
 function _showTyping() {
     var id = FRAI.activeTab === "coding" ? "frai-typing-coding" : "frai-typing";
     var t  = document.getElementById(id);
-    if (t) t.classList.add("frai-visible");
+    if (!t) return;
+    t.classList.add("frai-visible");
+
+    var labels  = FRAI.activeTab === "coding" ? CODING_TYPING_LABELS : GUIDE_TYPING_LABELS;
+    var labelEl = t.querySelector(".frai-typing-label");
+    var idx = 0;
+    if (labelEl) labelEl.textContent = labels[0];
+
+    clearInterval(_typingLabelTimers[id]);
+    _typingLabelTimers[id] = setInterval(function () {
+        idx = (idx + 1) % labels.length;
+        if (labelEl) labelEl.textContent = labels[idx];
+    }, 1500);
+
     _scrollBottom();
 }
 
@@ -1051,6 +1313,9 @@ function _hideTyping() {
     var id = FRAI.activeTab === "coding" ? "frai-typing-coding" : "frai-typing";
     var t  = document.getElementById(id);
     if (t) t.classList.remove("frai-visible");
+    clearInterval(_typingLabelTimers[id]);
+    var labelEl = t && t.querySelector(".frai-typing-label");
+    if (labelEl) labelEl.textContent = "Thinking…";
 }
 
 function _scrollBottom() {
@@ -1060,25 +1325,66 @@ function _scrollBottom() {
 
 
 // ════════════════════════════════════════════════════════════════
-// CODING AGENT
+// CODING — welcome with capability grid
 // ════════════════════════════════════════════════════════════════
-
 function _showCodingWelcome() {
-    var chips = [
-        "Add a GSTIN field to Customer",
-        "Add a 'Priority' select field to Sales Order",
-        "Create a workflow for Purchase Order approval",
-        "Validate that email is filled on Customer save",
-    ];
     _addBubble(
-        "I'm the <strong>Coding Agent</strong>. I can make real changes to your ERPNext — " +
-        "adding custom fields, writing server/client scripts, or building approval workflows.<br><br>" +
-        "Every change goes through a <strong>Review &rarr; Confirm</strong> step before anything is applied.",
-        "frai-agent",
-        chips
+        "I'm <strong>Forge</strong> — I make real changes to ERPNext from plain English.<br>" +
+        "Every change goes through a <strong>Review &rarr; Confirm</strong> step before it's applied.<br><br>" +
+        "What do you want to build?",
+        "frai-agent"
     );
+
+    var msgs   = document.getElementById("frai-messages-coding");
+    var typing = document.getElementById("frai-typing-coding");
+    if (!msgs) return;
+
+    var grid = _buildCapGrid();
+    if (typing && msgs.contains(typing)) {
+        msgs.insertBefore(grid, typing);
+    } else {
+        msgs.appendChild(grid);
+    }
+    _scrollBottom();
 }
 
+function _buildCapGrid() {
+    var caps = [
+        { icon: "⚙️", label: "Custom Fields", desc: "Add fields to any existing form",  prompt: "Add a custom field to " },
+        { icon: "📄", label: "New DocType",    desc: "Create a new table from scratch",   prompt: "Create a new DocType called " },
+        { icon: "⚡",  label: "Scripts",        desc: "Python and JS automation",          prompt: "Write a server script that " },
+        { icon: "🔀", label: "Workflows",      desc: "Approval flows with roles",          prompt: "Create an approval workflow for " },
+    ];
+
+    var grid = document.createElement("div");
+    grid.className = "frai-cap-grid";
+
+    caps.forEach(function (cap) {
+        var card = document.createElement("div");
+        card.className = "frai-cap-card";
+        card.innerHTML =
+            '<span class="frai-cap-icon">' + cap.icon + '</span>' +
+            '<span class="frai-cap-label">' + cap.label + '</span>' +
+            '<span class="frai-cap-desc">' + cap.desc + '</span>';
+        card.addEventListener("click", function () {
+            var inputEl = document.getElementById("frai-input");
+            if (inputEl) {
+                inputEl.value = cap.prompt;
+                inputEl.focus();
+                inputEl.style.height = "auto";
+                inputEl.style.height = Math.min(inputEl.scrollHeight, 96) + "px";
+            }
+        });
+        grid.appendChild(card);
+    });
+
+    return grid;
+}
+
+
+// ════════════════════════════════════════════════════════════════
+// CODING — send message with conversation history
+// ════════════════════════════════════════════════════════════════
 function sendCodingMessage() {
     var input = document.getElementById("frai-input");
     if (!input) return;
@@ -1090,20 +1396,24 @@ function sendCodingMessage() {
     input.style.height = "auto";
 
     _removeAllChips();
+    _removeCapGrid();
     _addBubble(text, "frai-user");
     _showTyping();
     FRAI.sending = true;
 
-    // Snapshot context at send time
-    var sendDoctype = FRAI.doctype || "";
-    var sendDocname = FRAI.docname || "";
+    // Snapshot history before this turn (excludes current message)
+    var historySnapshot = JSON.stringify(FRAI.codingHistory.slice(-14));
+
+    // Optimistically add user message to history
+    FRAI.codingHistory.push({ role: "user", content: text });
 
     frappe.call({
         method: "frappe_ai_assistant.api.coding_agent.chat",
         args: {
             message: text,
-            doctype: sendDoctype,
-            docname: sendDocname,
+            history: historySnapshot,
+            doctype: FRAI.doctype || "",
+            docname: FRAI.docname || "",
         },
         callback: function (r) {
             FRAI.sending = false;
@@ -1113,32 +1423,46 @@ function sendCodingMessage() {
                 return;
             }
             var data = r.message;
+            var replyText = data.reply || "";
             if (data.preview) {
-                _showPreviewCard(data.reply, data.preview);
+                _showPreviewCard(replyText, data.preview);
+                FRAI.codingHistory.push({ role: "assistant", content: data.preview.summary || replyText });
             } else {
-                _addBubble(data.reply || "—", "frai-agent");
+                _addBubble(replyText || "—", "frai-agent");
+                FRAI.codingHistory.push({ role: "assistant", content: replyText });
             }
         },
         error: function (err) {
             FRAI.sending = false;
             _hideTyping();
+            FRAI.codingHistory.pop(); // remove the optimistic user message
             _addBubble(
                 "Server error. Check that <code>groq_api_key</code> is set in site_config.json.",
                 "frai-error"
             );
-            console.error("[Frappe AI] coding error:", err);
+            console.error("[Forge] build error:", err);
         },
     });
 }
 
+
+// ════════════════════════════════════════════════════════════════
+// CODING — preview card (amber stripe + tool badge)
+// ════════════════════════════════════════════════════════════════
 function _showPreviewCard(previewHtml, preview) {
     var msgs = document.getElementById("frai-messages-coding");
     if (!msgs) return;
 
     FRAI.pendingSessionKey = preview.session_key;
 
+    var toolLabel = TOOL_LABELS[preview.tool] || (preview.tool || "CHANGE").toUpperCase();
+
     var card = document.createElement("div");
     card.className = "frai-preview-card";
+
+    var badge = document.createElement("div");
+    badge.className = "frai-preview-badge";
+    badge.textContent = toolLabel;
 
     var body = document.createElement("div");
     body.className = "frai-preview-body";
@@ -1147,7 +1471,7 @@ function _showPreviewCard(previewHtml, preview) {
     var actions = document.createElement("div");
     actions.className = "frai-preview-actions";
 
-    var applyBtn  = document.createElement("button");
+    var applyBtn = document.createElement("button");
     applyBtn.className   = "frai-btn-apply";
     applyBtn.textContent = "Apply Changes";
 
@@ -1157,12 +1481,10 @@ function _showPreviewCard(previewHtml, preview) {
 
     actions.appendChild(applyBtn);
     actions.appendChild(cancelBtn);
-
-    card.innerHTML = "<h4>Review Changes</h4>";
+    card.appendChild(badge);
     card.appendChild(body);
     card.appendChild(actions);
 
-    // Insert before the typing indicator
     var typing = document.getElementById("frai-typing-coding");
     if (typing && msgs.contains(typing)) {
         msgs.insertBefore(card, typing);
@@ -1175,7 +1497,7 @@ function _showPreviewCard(previewHtml, preview) {
         applyBtn.disabled    = true;
         cancelBtn.disabled   = true;
         applyBtn.textContent = "Applying…";
-        _applyCodingChange(preview.session_key, card);
+        _applyCodingChange(preview.session_key, card, preview.tool);
     });
 
     cancelBtn.addEventListener("click", function () {
@@ -1185,7 +1507,7 @@ function _showPreviewCard(previewHtml, preview) {
     });
 }
 
-function _applyCodingChange(sessionKey, previewCard) {
+function _applyCodingChange(sessionKey, previewCard, toolName) {
     frappe.call({
         method: "frappe_ai_assistant.api.coding_agent.apply",
         args:   { session_key: sessionKey },
@@ -1199,7 +1521,7 @@ function _applyCodingChange(sessionKey, previewCard) {
             }
             var data = r.message;
             if (data.success) {
-                _showSuccessCard(data.result, data.change_log);
+                _showSuccessCard(data.result, data.change_log, toolName);
             } else {
                 _addBubble("Apply failed: " + (data.error || "unknown error"), "frai-error");
             }
@@ -1212,35 +1534,109 @@ function _applyCodingChange(sessionKey, previewCard) {
     });
 }
 
-function _showSuccessCard(result, changeLogName) {
+
+// ════════════════════════════════════════════════════════════════
+// CODING — success card (green stripe + checkmark animation + suggestion)
+// ════════════════════════════════════════════════════════════════
+function _showSuccessCard(result, changeLogName, toolName) {
     var msgs = document.getElementById("frai-messages-coding");
     if (!msgs) return;
 
     var card = document.createElement("div");
     card.className = "frai-success-card";
-    card.innerHTML =
-        "<h4>Applied Successfully</h4>" +
-        "<div>" + (result.doctype || "") + ": <strong>" + (result.name || result.label || "") + "</strong>" +
-        (result.target ? " on " + result.target : "") + "</div>";
 
-    if (changeLogName) {
-        var rollbackBtn = document.createElement("button");
-        rollbackBtn.className   = "frai-rollback-link";
-        rollbackBtn.textContent = "Undo this change";
-        rollbackBtn.addEventListener("click", function () {
-            rollbackBtn.textContent = "Undoing…";
-            rollbackBtn.disabled    = true;
-            _rollbackChange(changeLogName, card);
+    // Animated checkmark header
+    var header = document.createElement("div");
+    header.className = "frai-success-header";
+    header.innerHTML =
+        '<div class="frai-check-circle">' +
+            '<svg class="frai-check-svg" viewBox="0 0 14 14">' +
+                '<polyline class="frai-check-path" points="2,7 5.5,10.5 12,3"/>' +
+            '</svg>' +
+        '</div>' +
+        '<span class="frai-success-title">Applied successfully</span>';
+
+    var detail = document.createElement("div");
+    detail.className = "frai-success-detail";
+    var detailParts = [];
+    if (result.doctype) detailParts.push(result.doctype);
+    if (result.name || result.label) detailParts.push("<strong>" + (result.name || result.label) + "</strong>");
+    if (result.target)               detailParts.push("on <em>" + result.target + "</em>");
+    detail.innerHTML = detailParts.join(": ").replace(/: on/, " on");
+
+    card.appendChild(header);
+    card.appendChild(detail);
+
+    // Smart suggestion pill
+    var suggestion = toolName ? POST_APPLY_SUGGESTIONS[toolName] : null;
+    if (suggestion) {
+        var pill = document.createElement("button");
+        pill.className   = "frai-suggestion-pill";
+        pill.textContent = "💡 " + suggestion;
+        pill.addEventListener("click", function () {
+            pill.remove();
+            var inputEl = document.getElementById("frai-input");
+            if (inputEl) {
+                inputEl.value = suggestion;
+                inputEl.focus();
+            }
         });
-        card.appendChild(rollbackBtn);
+        card.appendChild(pill);
     }
 
+    // Actions row
+    var actionsDiv = document.createElement("div");
+    actionsDiv.className = "frai-success-actions";
+
     var reloadBtn = document.createElement("button");
-    reloadBtn.className   = "frai-rollback-link";
-    reloadBtn.textContent = "Reload page to see changes";
-    reloadBtn.style.marginLeft = changeLogName ? "12px" : "0";
+    reloadBtn.className   = "frai-btn-reload";
+    reloadBtn.textContent = "↻ Reload page";
     reloadBtn.addEventListener("click", function () { window.location.reload(); });
-    card.appendChild(reloadBtn);
+    actionsDiv.appendChild(reloadBtn);
+
+    if (changeLogName) {
+        var undoBtn = document.createElement("button");
+        undoBtn.className   = "frai-btn-undo";
+        undoBtn.textContent = "↩ Undo";
+        actionsDiv.appendChild(undoBtn);
+
+        var errText = document.createElement("div");
+        errText.style.cssText = "font-size:11px;color:var(--red,#e74c3c);margin-top:4px;display:none;";
+
+        undoBtn.addEventListener("click", function () {
+            undoBtn.disabled    = true;
+            undoBtn.textContent = "Undoing…";
+            errText.style.display = "none";
+
+            frappe.call({
+                method: "frappe_ai_assistant.api.coding_agent.rollback",
+                args:   { change_log_name: changeLogName },
+                callback: function (r) {
+                    var data = r && r.message;
+                    if (data && data.success) {
+                        card.remove();
+                        _addBubble("↩ Change has been undone.", "frai-agent");
+                    } else {
+                        undoBtn.disabled    = false;
+                        undoBtn.textContent = "↩ Undo";
+                        errText.textContent   = (data && data.error) || "Rollback failed.";
+                        errText.style.display = "block";
+                    }
+                },
+                error: function () {
+                    undoBtn.disabled    = false;
+                    undoBtn.textContent = "↩ Undo";
+                    errText.textContent   = "Server error — rollback failed.";
+                    errText.style.display = "block";
+                },
+            });
+        });
+
+        card.appendChild(actionsDiv);
+        card.appendChild(errText);
+    } else {
+        card.appendChild(actionsDiv);
+    }
 
     var typing = document.getElementById("frai-typing-coding");
     if (typing && msgs.contains(typing)) {
@@ -1251,25 +1647,137 @@ function _showSuccessCard(result, changeLogName) {
     msgs.scrollTop = msgs.scrollHeight;
 }
 
-function _rollbackChange(changeLogName, successCard) {
+
+// ════════════════════════════════════════════════════════════════
+// HISTORY TAB
+// ════════════════════════════════════════════════════════════════
+function _loadHistory() {
+    var listEl = document.getElementById("frai-history-list");
+    if (!listEl) return;
+
+    listEl.innerHTML = '<div class="frai-history-loading">Loading changes…</div>';
+
+    frappe.call({
+        method: "frappe_ai_assistant.api.coding_agent.get_change_log",
+        args:   { limit: 20 },
+        callback: function (r) {
+            var items = r && r.message;
+            listEl.innerHTML = "";
+
+            if (!items || !items.length) {
+                listEl.innerHTML =
+                    '<div class="frai-history-empty">' +
+                        '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" ' +
+                             'stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">' +
+                            '<path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/>' +
+                            '<rect x="9" y="3" width="6" height="4" rx="1"/>' +
+                            '<line x1="9" y1="12" x2="15" y2="12"/>' +
+                            '<line x1="9" y1="16" x2="13" y2="16"/>' +
+                        '</svg>' +
+                        'No changes yet.<br>Use the Build tab to make your first change.' +
+                    '</div>';
+                return;
+            }
+
+            items.forEach(function (item) {
+                listEl.appendChild(_buildHistoryItem(item));
+            });
+        },
+        error: function () {
+            listEl.innerHTML = '<div class="frai-history-empty">Could not load history.</div>';
+        }
+    });
+}
+
+function _buildHistoryItem(item) {
+    var badgeInfo  = HISTORY_BADGE_MAP[item.change_type] || { cls: "frai-hb-documents", label: item.change_type };
+    var rolledBack = item.status === "Rolled Back";
+
+    var div = document.createElement("div");
+    div.className = "frai-history-item" + (rolledBack ? " frai-rolled-back" : "");
+
+    var badge = document.createElement("span");
+    badge.className = "frai-history-badge " + badgeInfo.cls;
+    badge.textContent = badgeInfo.label;
+
+    var info = document.createElement("div");
+    info.className = "frai-history-info";
+
+    var name = document.createElement("div");
+    name.className = "frai-history-name";
+    name.title     = item.change_name || "";
+    name.textContent = item.change_name || "(unnamed)";
+
+    var meta = document.createElement("div");
+    meta.className = "frai-history-meta";
+    var parts = [];
+    if (item.target_doctype) parts.push(item.target_doctype);
+    if (item.applied_at)     parts.push(_formatRelative(item.applied_at));
+    meta.textContent = parts.join(" · ");
+
+    info.appendChild(name);
+    info.appendChild(meta);
+    div.appendChild(badge);
+    div.appendChild(info);
+
+    if (rolledBack) {
+        var label = document.createElement("span");
+        label.className   = "frai-history-rolled-label";
+        label.textContent = "Rolled back";
+        div.appendChild(label);
+    } else {
+        var undoBtn = document.createElement("button");
+        undoBtn.className   = "frai-history-undo-btn";
+        undoBtn.textContent = "↩ Undo";
+        undoBtn.addEventListener("click", function () {
+            _rollbackHistoryItem(item.name, undoBtn, div);
+        });
+        div.appendChild(undoBtn);
+    }
+
+    return div;
+}
+
+function _rollbackHistoryItem(changeLogName, btn, row) {
+    btn.disabled    = true;
+    btn.textContent = "Undoing…";
+
     frappe.call({
         method: "frappe_ai_assistant.api.coding_agent.rollback",
         args:   { change_log_name: changeLogName },
         callback: function (r) {
-            if (successCard) successCard.remove();
             var data = r && r.message;
             if (data && data.success) {
-                _addBubble("Rolled back: " + (data.message || changeLogName), "frai-agent");
+                btn.remove();
+                var label = document.createElement("span");
+                label.className   = "frai-history-rolled-label";
+                label.textContent = "Rolled back";
+                row.appendChild(label);
+                row.classList.add("frai-rolled-back");
             } else {
-                _addBubble(
-                    "Rollback failed: " + (data && data.error || "unknown error"),
-                    "frai-error"
-                );
+                btn.disabled    = false;
+                btn.textContent = "↩ Undo";
+                frappe.show_alert({ message: (data && data.error) || "Rollback failed.", indicator: "red" });
             }
         },
         error: function () {
-            if (successCard) successCard.remove();
-            _addBubble("Rollback failed — server error.", "frai-error");
-        },
+            btn.disabled    = false;
+            btn.textContent = "↩ Undo";
+            frappe.show_alert({ message: "Server error — rollback failed.", indicator: "red" });
+        }
     });
+}
+
+function _formatRelative(dateStr) {
+    if (!dateStr) return "";
+    try {
+        var d    = new Date(dateStr.replace(" ", "T"));
+        var diff = (Date.now() - d.getTime()) / 1000;
+        if (diff < 60)    return "just now";
+        if (diff < 3600)  return Math.round(diff / 60) + "m ago";
+        if (diff < 86400) return Math.round(diff / 3600) + "h ago";
+        return Math.round(diff / 86400) + "d ago";
+    } catch (e) {
+        return dateStr;
+    }
 }
