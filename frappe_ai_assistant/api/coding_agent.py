@@ -185,7 +185,16 @@ class CreateDocumentsInput(BaseModel):
 	def no_banned_doctype(cls, v):
 		if v in BANNED_DOCTYPES:
 			raise ValueError(f"Creating records in '{v}' is not allowed.")
-		return v
+		# Resolve exact casing from DB so tabAirline isn't queried as tabairline
+		import frappe as _frappe
+		actual = _frappe.db.get_value("DocType", {"name": v}, "name")
+		if not actual:
+			rows = _frappe.db.sql(
+				"SELECT name FROM `tabDocType` WHERE LOWER(name) = LOWER(%s) LIMIT 1",
+				[v], as_dict=True,
+			)
+			actual = rows[0]["name"] if rows else v
+		return actual
 
 	def parse_records(self) -> list[dict]:
 		try:
@@ -465,12 +474,18 @@ You make REAL changes to ERPNext by calling tools. Every change is shown to the 
 7. create_workflow — build an approval workflow on a DocType.
 
 ## Rules
+- If the user asks to undo, rollback, revert, or cancel a change, do NOT call any tool.
+  Reply with plain text: "To undo a change, click the **Undo this change** link in the
+  green success card above. You can also find all changes in the AI Change Log."
 - Use create_doctype when the user asks to create a new DocType, master, or table.
 - Use create_documents to insert sample or seed records into a DocType.
 - If the user asks to create a DocType AND seed records, call create_doctype first,
   then create_documents in the SAME response as two sequential tool calls — but since
   you can only call one tool per response, call create_doctype first. The user will
   confirm and apply it, then you will call create_documents.
+- ALWAYS call read_doctype_meta before create_documents. Read the field list, find every
+  field where reqd=true, and include a realistic value for each mandatory field in every
+  record. Never guess field names — read the meta first, then insert.
 - ALWAYS call read_doctype_meta first before create_custom_field.
 - Never target: User, Role, DocType, DocField, Has Role, DocPerm.
 - For fields_json use valid JSON array. Each item: label, fieldtype, mandatory (bool), non_negative (bool), read_only (bool), options (str|null), fetch_from (str|null).
@@ -493,15 +508,32 @@ You make REAL changes to ERPNext by calling tools. Every change is shown to the 
 # Public endpoints
 # ════════════════════════════════════════════════════════════════
 
+def _get_groq_client():
+	"""
+	Return a Groq client using the primary key, or the backup key
+	(groq_api_key_2) if the primary is missing.  Returns (client, key_label).
+	"""
+	from groq import Groq
+	primary = frappe.conf.get("groq_api_key")
+	backup  = frappe.conf.get("groq_api_key_2")
+	if primary:
+		return Groq(api_key=primary), "primary"
+	if backup:
+		return Groq(api_key=backup), "backup"
+	return None, None
+
+
 @frappe.whitelist()
-def chat(message, doctype="", docname=""):
+def chat(message, history="", doctype="", docname=""):
 	"""
 	Analyse the user's plain-English request with the LLM.
 	Executes read_doctype_meta immediately (safe).
 	For action tools returns a preview dict — nothing is applied yet.
+	Accepts an optional `history` JSON array of prior {role, content} pairs
+	so the LLM retains context across multiple turns in the same session.
 	"""
-	api_key = frappe.conf.get("groq_api_key")
-	if not api_key:
+	client, key_label = _get_groq_client()
+	if not client:
 		return _err(
 			"Groq API key not configured. "
 			"Add <code>groq_api_key</code> to your site_config.json."
@@ -510,37 +542,70 @@ def chat(message, doctype="", docname=""):
 	if "System Manager" not in frappe.get_roles():
 		return _err("The Coding Agent requires the System Manager role.")
 
-	from groq import Groq
-
-	client = Groq(api_key=api_key)
+	# Parse conversation history for multi-turn context (last 7 pairs = 14 msgs)
+	history_msgs = []
+	if history:
+		try:
+			parsed = json.loads(history)
+			history_msgs = [
+				m for m in parsed
+				if isinstance(m, dict)
+				and m.get("role") in ("user", "assistant")
+				and isinstance(m.get("content"), str)
+			][-14:]
+		except Exception:
+			pass
 
 	messages = [
 		{"role": "system", "content": CODING_SYSTEM_PROMPT},
+		*history_msgs,
 		{"role": "user",   "content": message},
 	]
 
-	# Tool-calling loop — supports read → write patterns (up to 3 LLM calls)
-	for _pass in range(3):
+	def _call_llm(msgs, use_tools=True):
+		"""Call the LLM, switching to the backup key on rate limit."""
+		nonlocal client, key_label
+		kwargs = dict(
+			model="llama-3.3-70b-versatile",
+			messages=msgs,
+			max_tokens=1400 if use_tools else 500,
+			temperature=0.15 if use_tools else 0.3,
+		)
+		if use_tools:
+			kwargs["tools"]       = TOOLS
+			kwargs["tool_choice"] = "auto"
 		try:
-			response = client.chat.completions.create(
-				model="llama-3.3-70b-versatile",
-				messages=messages,
-				tools=TOOLS,
-				tool_choice="auto",
-				max_tokens=1400,
-				temperature=0.15,
-			)
+			return client.chat.completions.create(**kwargs)
 		except Exception as exc:
+			exc_str = str(exc)
+			if ("rate_limit_exceeded" in exc_str or "429" in exc_str) and key_label == "primary":
+				backup_key = frappe.conf.get("groq_api_key_2")
+				if backup_key:
+					from groq import Groq as _Groq
+					client    = _Groq(api_key=backup_key)
+					key_label = "backup"
+					return client.chat.completions.create(**kwargs)
+			raise
+
+	# Tool-calling loop — supports read → write patterns (up to 4 LLM calls)
+	for _pass in range(4):
+		try:
+			response = _call_llm(messages)
+		except Exception as exc:
+			exc_str = str(exc)
+			if "rate_limit_exceeded" in exc_str or "429" in exc_str:
+				import re
+				wait = re.search(r"try again in ([^\\.,']+)", exc_str)
+				wait_msg = f" Try again in {wait.group(1)}." if wait else ""
+				return _err(f"Groq rate limit reached — both API keys exhausted.{wait_msg}")
 			# Groq raises BadRequestError with code=tool_use_failed when the model
 			# generates a blank or malformed tool call. Retry without tools so the
 			# user gets a helpful clarification instead of a hard error.
-			if "tool_use_failed" in str(exc):
-				fallback = client.chat.completions.create(
-					model="llama-3.3-70b-versatile",
-					messages=messages,
-					max_tokens=500,
-					temperature=0.3,
-				)
+			if "tool_use_failed" in exc_str:
+				try:
+					fallback = _call_llm(messages, use_tools=False)
+				except Exception:
+					return _err("I need more details to proceed. Could you rephrase?")
 				return {
 					"reply": fallback.choices[0].message.content
 					         or "I need more details to proceed. Could you rephrase?",
@@ -579,6 +644,36 @@ def chat(message, doctype="", docname=""):
 				"content":      json.dumps(result),
 			})
 			continue  # Ask LLM what to do next
+
+		# create_documents without a prior meta read — inject schema and retry
+		if tool_name == "create_documents":
+			doctype = tool_args.get("doctype", "")
+			already_have_meta = any(
+				m.get("role") == "tool" and
+				m.get("content", "").find(f'"doctype": "{doctype}"') != -1
+				for m in messages
+			)
+			if doctype and not already_have_meta:
+				meta = _exec_read_doctype_meta(doctype)
+				fake_id = frappe.generate_hash(length=16)
+				messages.append({
+					"role":    "assistant",
+					"content": None,
+					"tool_calls": [{
+						"id":   fake_id,
+						"type": "function",
+						"function": {
+							"name":      "read_doctype_meta",
+							"arguments": json.dumps({"doctype": doctype}),
+						},
+					}],
+				})
+				messages.append({
+					"role":         "tool",
+					"tool_call_id": fake_id,
+					"content":      json.dumps(meta),
+				})
+				continue  # LLM retries with real field list + mandatory flags
 
 		# Action tool — validate and stage
 		try:
@@ -955,6 +1050,8 @@ def _apply_workflow(args):
 
 
 def _apply_create_doctype(args):
+	import pathlib
+
 	name = args["name"]
 	if frappe.db.exists("DocType", name):
 		raise ValueError(f"DocType '{name}' already exists.")
@@ -971,32 +1068,106 @@ def _apply_create_doctype(args):
 	else:
 		autoname = AUTONAME_MAP.get(naming_rule, "")
 
+	# Resolve our app's module — fall back to hardcoded value
+	module = "Frappe Ai Assistant"
+	try:
+		found = frappe.get_all(
+			"Module Def",
+			filters={"app_name": "frappe_ai_assistant"},
+			pluck="name",
+			limit=1,
+		)
+		if found:
+			module = found[0]
+	except Exception:
+		pass
+
 	doc = frappe.get_doc({
-		"doctype":          "DocType",
-		"name":             name,
-		"module":           "Frappe Ai Assistant",
-		"naming_rule":      naming_rule,
-		"autoname":         autoname,
-		"is_submittable":   1 if args.get("is_submittable") else 0,
-		"custom":           1,
-		"fields":           args["fields"],
+		"doctype":        "DocType",
+		"name":           name,
+		"module":         module,
+		"naming_rule":    naming_rule,
+		"autoname":       autoname,
+		"is_submittable": 1 if args.get("is_submittable") else 0,
+		"custom":         1,
+		"fields":         args["fields"],
+		"permissions": [
+			{
+				"role":   "System Manager",
+				"read":   1, "write":  1, "create": 1,
+				"delete": 1, "submit": 0, "cancel": 0,
+				"amend":  0, "report": 1, "export": 1,
+				"import": 0, "print":  1, "email":  1,
+			}
+		],
 	})
 	doc.insert(ignore_permissions=True)
 	frappe.clear_cache()
+
+	# ── Write controller files on disk ───────────────────────────
+	snake_name  = name.lower().replace(" ", "_")
+	pascal_name = "".join(w.title() for w in name.split())
+
+	app_path    = pathlib.Path(frappe.get_app_path("frappe_ai_assistant"))
+	doctype_dir = app_path / "doctype"
+	doctype_dir.mkdir(parents=True, exist_ok=True)
+	# Ensure the doctype/ package itself is importable
+	pkg_init = doctype_dir / "__init__.py"
+	if not pkg_init.exists():
+		pkg_init.write_text("")
+
+	folder = doctype_dir / snake_name
+	folder.mkdir(parents=True, exist_ok=True)
+
+	(folder / "__init__.py").write_text("")
+
+	(folder / f"{snake_name}.py").write_text(
+		f"import frappe\n"
+		f"from frappe.model.document import Document\n\n\n"
+		f"class {pascal_name}(Document):\n"
+		f"    pass\n"
+	)
+
+	doc_dict = frappe.get_doc("DocType", name).as_dict()
+	(folder / f"{snake_name}.json").write_text(
+		frappe.as_json(doc_dict, indent=1)
+	)
+
+	module_snake = module.lower().replace(" ", "_")
+	frappe.reload_doc(module_snake, "doctype", snake_name)
+
 	return {"name": name, "doctype": "DocType", "label": name, "target": ""}
 
 
 def _apply_create_documents(args):
 	doctype = args["doctype"]
-	if not frappe.db.exists("DocType", doctype):
+	# Resolve the exact case the DocType was created with (LLM may send lowercase)
+	actual = frappe.db.get_value("DocType", {"name": doctype}, "name")
+	if not actual:
+		rows = frappe.db.sql(
+			"SELECT name FROM `tabDocType` WHERE LOWER(name) = LOWER(%s) LIMIT 1",
+			[doctype], as_dict=True,
+		)
+		actual = rows[0]["name"] if rows else None
+	if not actual:
 		raise ValueError(f"DocType '{doctype}' does not exist. Create it first.")
+	doctype = actual
 
 	created = []
 	for record in args["records"]:
 		doc_data = dict(record)
 		doc_data["doctype"] = doctype
 		doc = frappe.get_doc(doc_data)
-		doc.insert(ignore_permissions=True)
+		try:
+			doc.insert(ignore_permissions=True)
+		except frappe.exceptions.MandatoryError as exc:
+			# Extract the field name from "[DocType, name]: fieldname"
+			raw = str(exc)
+			field = raw.split(":")[-1].strip() if ":" in raw else raw
+			raise ValueError(
+				f"Missing mandatory field '{field}' in {doctype}. "
+				f"Include it in every record."
+			) from exc
 		created.append(doc.name)
 
 	frappe.db.commit()
