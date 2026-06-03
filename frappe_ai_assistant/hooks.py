@@ -1,7 +1,7 @@
 app_name = "frappe_ai_assistant"
-app_title = "Frappe Ai Assistant"
+app_title = "Forge AI Assistant"
 app_publisher = "Aditya Boi"
-app_description = "Ai Assitant"
+app_description = "AI Assistant for ERPNext"
 app_email = "as0742004@gmail.com"
 app_license = "mit"
 

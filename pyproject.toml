@@ -3,7 +3,7 @@ name = "frappe_ai_assistant"
 authors = [
     { name = "Aditya Boi", email = "as0742004@gmail.com"}
 ]
-description = "Ai Assitant"
+description = "AI Assistant for ERPNext"
 requires-python = ">=3.10"
 readme = "README.md"
 dynamic = ["version"]
