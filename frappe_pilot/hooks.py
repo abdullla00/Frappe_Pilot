@@ -1,5 +1,5 @@
-app_name = "frappe_ai_assistant"
-app_title = "Forge AI Assistant"
+app_name = "frappe_pilot"
+app_title = "Frappe Pilot"
 app_publisher = "Aditya Boi"
 app_description = "AI Assistant for ERPNext"
 app_email = "as0742004@gmail.com"
@@ -13,11 +13,11 @@ app_license = "mit"
 # Each item in the list will be shown as an app in the apps page
 # add_to_apps_screen = [
 # 	{
-# 		"name": "frappe_ai_assistant",
-# 		"logo": "/assets/frappe_ai_assistant/logo.png",
-# 		"title": "Frappe Ai Assistant",
-# 		"route": "/frappe_ai_assistant",
-# 		"has_permission": "frappe_ai_assistant.api.permission.has_app_permission"
+# 		"name": "frappe_pilot",
+# 		"logo": "/assets/frappe_pilot/logo.png",
+# 		"title": "Frappe Pilot",
+# 		"route": "/frappe_pilot",
+# 		"has_permission": "frappe_pilot.api.permission.has_app_permission"
 # 	}
 # ]
 
@@ -25,15 +25,15 @@ app_license = "mit"
 # ------------------
 
 # include js, css files in header of desk.html
-# app_include_css = "/assets/frappe_ai_assistant/css/frappe_ai_assistant.css"
-app_include_js = "/assets/frappe_ai_assistant/js/ai_sidebar.js"
+# app_include_css = "/assets/frappe_pilot/css/frappe_pilot.css"
+app_include_js = "/assets/frappe_pilot/js/ai_sidebar.js"
 
 # include js, css files in header of web template
-# web_include_css = "/assets/frappe_ai_assistant/css/frappe_ai_assistant.css"
-# web_include_js = "/assets/frappe_ai_assistant/js/frappe_ai_assistant.js"
+# web_include_css = "/assets/frappe_pilot/css/frappe_pilot.css"
+# web_include_js = "/assets/frappe_pilot/js/frappe_pilot.js"
 
 # include custom scss in every website theme (without file extension ".scss")
-# website_theme_scss = "frappe_ai_assistant/public/scss/website"
+# website_theme_scss = "frappe_pilot/public/scss/website"
 
 # include js, css files in header of web form
 # webform_include_js = {"doctype": "public/js/doctype.js"}
@@ -43,7 +43,7 @@ app_include_js = "/assets/frappe_ai_assistant/js/ai_sidebar.js"
 # page_js = {"page" : "public/js/file.js"}
 
 # include js in doctype views
-# doctype_js = {"doctype" : "public/js/doctype.js"}
+doctype_js = {"Pilot Settings": "public/js/pilot_settings.js"}
 # doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
 # doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}
@@ -51,7 +51,7 @@ app_include_js = "/assets/frappe_ai_assistant/js/ai_sidebar.js"
 # Svg Icons
 # ------------------
 # include app icons in desk
-# app_include_icons = "frappe_ai_assistant/public/icons.svg"
+# app_include_icons = "frappe_pilot/public/icons.svg"
 
 # Home Pages
 # ----------
@@ -75,43 +75,44 @@ app_include_js = "/assets/frappe_ai_assistant/js/ai_sidebar.js"
 
 # add methods and filters to jinja environment
 # jinja = {
-# 	"methods": "frappe_ai_assistant.utils.jinja_methods",
-# 	"filters": "frappe_ai_assistant.utils.jinja_filters"
+# 	"methods": "frappe_pilot.utils.jinja_methods",
+# 	"filters": "frappe_pilot.utils.jinja_filters"
 # }
 
 # Installation
 # ------------
 
-# before_install = "frappe_ai_assistant.install.before_install"
-# after_install = "frappe_ai_assistant.install.after_install"
+# before_install = "frappe_pilot.install.before_install"
+after_install = "frappe_pilot.install.after_install"
+after_migrate = ["frappe_pilot.install.after_migrate"]
 
 # Uninstallation
 # ------------
 
-# before_uninstall = "frappe_ai_assistant.uninstall.before_uninstall"
-# after_uninstall = "frappe_ai_assistant.uninstall.after_uninstall"
+# before_uninstall = "frappe_pilot.uninstall.before_uninstall"
+# after_uninstall = "frappe_pilot.uninstall.after_uninstall"
 
 # Integration Setup
 # ------------------
 # To set up dependencies/integrations with other apps
 # Name of the app being installed is passed as an argument
 
-# before_app_install = "frappe_ai_assistant.utils.before_app_install"
-# after_app_install = "frappe_ai_assistant.utils.after_app_install"
+# before_app_install = "frappe_pilot.utils.before_app_install"
+# after_app_install = "frappe_pilot.utils.after_app_install"
 
 # Integration Cleanup
 # -------------------
 # To clean up dependencies/integrations with other apps
 # Name of the app being uninstalled is passed as an argument
 
-# before_app_uninstall = "frappe_ai_assistant.utils.before_app_uninstall"
-# after_app_uninstall = "frappe_ai_assistant.utils.after_app_uninstall"
+# before_app_uninstall = "frappe_pilot.utils.before_app_uninstall"
+# after_app_uninstall = "frappe_pilot.utils.after_app_uninstall"
 
 # Desk Notifications
 # ------------------
 # See frappe.core.notifications.get_notification_config
 
-# notification_config = "frappe_ai_assistant.notifications.get_notification_config"
+# notification_config = "frappe_pilot.notifications.get_notification_config"
 
 # Permissions
 # -----------
@@ -150,39 +151,39 @@ app_include_js = "/assets/frappe_ai_assistant/js/ai_sidebar.js"
 
 # scheduler_events = {
 # 	"all": [
-# 		"frappe_ai_assistant.tasks.all"
+# 		"frappe_pilot.tasks.all"
 # 	],
 # 	"daily": [
-# 		"frappe_ai_assistant.tasks.daily"
+# 		"frappe_pilot.tasks.daily"
 # 	],
 # 	"hourly": [
-# 		"frappe_ai_assistant.tasks.hourly"
+# 		"frappe_pilot.tasks.hourly"
 # 	],
 # 	"weekly": [
-# 		"frappe_ai_assistant.tasks.weekly"
+# 		"frappe_pilot.tasks.weekly"
 # 	],
 # 	"monthly": [
-# 		"frappe_ai_assistant.tasks.monthly"
+# 		"frappe_pilot.tasks.monthly"
 # 	],
 # }
 
 # Testing
 # -------
 
-# before_tests = "frappe_ai_assistant.install.before_tests"
+# before_tests = "frappe_pilot.install.before_tests"
 
 # Overriding Methods
 # ------------------------------
 #
 # override_whitelisted_methods = {
-# 	"frappe.desk.doctype.event.event.get_events": "frappe_ai_assistant.event.get_events"
+# 	"frappe.desk.doctype.event.event.get_events": "frappe_pilot.event.get_events"
 # }
 #
 # each overriding function accepts a `data` argument;
 # generated from the base implementation of the doctype dashboard,
 # along with any modifications made in other Frappe apps
 # override_doctype_dashboards = {
-# 	"Task": "frappe_ai_assistant.task.get_dashboard_data"
+# 	"Task": "frappe_pilot.task.get_dashboard_data"
 # }
 
 # exempt linked doctypes from being automatically cancelled
@@ -196,13 +197,13 @@ app_include_js = "/assets/frappe_ai_assistant/js/ai_sidebar.js"
 
 # Request Events
 # ----------------
-# before_request = ["frappe_ai_assistant.utils.before_request"]
-# after_request = ["frappe_ai_assistant.utils.after_request"]
+# before_request = ["frappe_pilot.utils.before_request"]
+# after_request = ["frappe_pilot.utils.after_request"]
 
 # Job Events
 # ----------
-# before_job = ["frappe_ai_assistant.utils.before_job"]
-# after_job = ["frappe_ai_assistant.utils.after_job"]
+# before_job = ["frappe_pilot.utils.before_job"]
+# after_job = ["frappe_pilot.utils.after_job"]
 
 # User Data Protection
 # --------------------
@@ -232,7 +233,7 @@ app_include_js = "/assets/frappe_ai_assistant/js/ai_sidebar.js"
 # --------------------------------
 
 # auth_hooks = [
-# 	"frappe_ai_assistant.auth.validate"
+# 	"frappe_pilot.auth.validate"
 # ]
 
 # Automatically update python controller files with type annotations for this app.

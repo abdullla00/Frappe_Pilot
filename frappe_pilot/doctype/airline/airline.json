@@ -270,7 +270,7 @@
  "migration_hash": null,
  "modified": "2026-06-01 15:47:03.820736",
  "modified_by": "Administrator",
- "module": "Frappe Ai Assistant",
+ "module": "Frappe Pilot",
  "name": "Airline",
  "naming_rule": "Set by user",
  "nsm_parent_field": null,

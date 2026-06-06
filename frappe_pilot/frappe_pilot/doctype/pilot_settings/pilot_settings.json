@@ -1,0 +1,431 @@
+{
+ "actions": [],
+ "creation": "2026-06-06 00:00:00",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "general_tab",
+  "enable_pilot",
+  "default_tab",
+  "sidebar_position",
+  "show_evidence_line",
+  "column_break_general",
+  "allowed_roles",
+  "section_break_languages",
+  "languages_help_html",
+  "enabled_languages",
+  "chip_locale_scope",
+  "section_break_navigation",
+  "auto_navigate",
+  "close_sidebar_on_navigate",
+  "api_keys_tab",
+  "llm_provider",
+  "api_key_status",
+  "column_break_api",
+  "section_break_groq",
+  "groq_api_key",
+  "groq_api_key_backup",
+  "section_break_openai",
+  "openai_api_key",
+  "section_break_gemini",
+  "gemini_api_key",
+  "api_setup_help",
+  "analyze_tab",
+  "analyze_enabled",
+  "analyze_model",
+  "analyze_max_passes",
+  "analyze_max_tokens",
+  "analyze_max_tokens_final",
+  "column_break_analyze",
+  "analyze_temperature",
+  "diagnose_temperature",
+  "context_char_budget",
+  "enable_document_checks",
+  "section_break_analyze_limits",
+  "max_linked_docs",
+  "max_linked_fields",
+  "max_gl_rows",
+  "max_list_rows",
+  "max_report_rows",
+  "max_timeline_items",
+  "max_tool_json_chars",
+  "build_tab",
+  "build_enabled",
+  "build_model",
+  "build_max_tokens",
+  "build_max_tokens_fallback",
+  "column_break_build",
+  "build_temperature",
+  "build_temperature_fallback",
+  "preview_expiry_minutes",
+  "build_allowed_roles",
+  "advanced_tab",
+  "custom_analyze_prompt",
+  "disabled_analyze_tools",
+  "debug_log_tool_calls"
+ ],
+ "fields": [
+  {
+   "fieldname": "general_tab",
+   "fieldtype": "Tab Break",
+   "label": "General"
+  },
+  {
+   "default": "1",
+   "fieldname": "enable_pilot",
+   "fieldtype": "Check",
+   "label": "Enable Pilot Sidebar"
+  },
+  {
+   "default": "Advisor",
+   "fieldname": "default_tab",
+   "fieldtype": "Select",
+   "label": "Default Tab",
+   "options": "Advisor\nBuild"
+  },
+  {
+   "default": "Right",
+   "description": "Default sidebar edge for all users. Users can override in the sidebar header.",
+   "fieldname": "sidebar_position",
+   "fieldtype": "Select",
+   "label": "Sidebar Position",
+   "options": "Right\nLeft\nBottom"
+  },
+  {
+   "default": "1",
+   "fieldname": "show_evidence_line",
+   "fieldtype": "Check",
+   "label": "Show Evidence Line in Advisor"
+  },
+  {
+   "fieldname": "column_break_general",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Leave empty to allow all desk users.",
+   "fieldname": "allowed_roles",
+   "fieldtype": "Table",
+   "label": "Allowed Roles",
+   "options": "Pilot Allowed Role"
+  },
+  {
+   "fieldname": "section_break_languages",
+   "fieldtype": "Section Break",
+   "label": "Languages"
+  },
+  {
+   "fieldname": "languages_help_html",
+   "fieldtype": "HTML",
+   "label": "Languages Help",
+   "options": "<p class=\"text-muted small\"><strong>English</strong> is the first row (required, not removable). Link additional rows to the <strong>Language</strong> list and use <strong>Enabled</strong> per row. Checked languages appear in the sidebar locale toggle and in localized suggestion chips. Use <strong>Suggestion Chip Languages</strong> to control chip locale rows.</p>"
+  },
+  {
+   "description": "English is seeded as the first row and cannot be removed. Link other Language records and enable per row for the sidebar locale toggle.",
+   "fieldname": "enabled_languages",
+   "fieldtype": "Table",
+   "label": "Pilot Languages",
+   "options": "Pilot Enabled Language"
+  },
+  {
+   "default": "all_enabled",
+   "description": "Controls which languages appear in suggestion chips and Build quick-action cards. English is always available in Pilot; this setting only affects chip/card locale rows.\n",
+   "fieldname": "chip_locale_scope",
+   "fieldtype": "Select",
+   "label": "Suggestion Chip Languages",
+   "options": "all_enabled\nactive_locale\nactive_plus_en"
+  },
+  {
+   "fieldname": "section_break_navigation",
+   "fieldtype": "Section Break",
+   "label": "Navigation"
+  },
+  {
+   "default": "0",
+   "description": "When off, Advisor shows a confirmation button before changing the desk page.",
+   "fieldname": "auto_navigate",
+   "fieldtype": "Check",
+   "label": "Auto-navigate on Go To Requests"
+  },
+  {
+   "default": "0",
+   "description": "Close the Pilot sidebar after following a navigation link.",
+   "fieldname": "close_sidebar_on_navigate",
+   "fieldtype": "Check",
+   "label": "Close Sidebar After Navigation"
+  },
+  {
+   "fieldname": "api_keys_tab",
+   "fieldtype": "Tab Break",
+   "label": "API Keys"
+  },
+  {
+   "default": "Groq",
+   "fieldname": "llm_provider",
+   "fieldtype": "Select",
+   "label": "LLM Provider",
+   "options": "Groq\nOpenAI\nGemini"
+  },
+  {
+   "fieldname": "api_key_status",
+   "fieldtype": "HTML",
+   "label": "API Key Status"
+  },
+  {
+   "fieldname": "column_break_api",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "section_break_groq",
+   "fieldtype": "Section Break",
+   "label": "Groq"
+  },
+  {
+   "fieldname": "groq_api_key",
+   "fieldtype": "Password",
+   "label": "Groq API Key"
+  },
+  {
+   "fieldname": "groq_api_key_backup",
+   "fieldtype": "Password",
+   "label": "Groq Backup API Key"
+  },
+  {
+   "fieldname": "section_break_openai",
+   "fieldtype": "Section Break",
+   "label": "OpenAI"
+  },
+  {
+   "fieldname": "openai_api_key",
+   "fieldtype": "Password",
+   "label": "OpenAI API Key"
+  },
+  {
+   "fieldname": "section_break_gemini",
+   "fieldtype": "Section Break",
+   "label": "Gemini"
+  },
+  {
+   "fieldname": "gemini_api_key",
+   "fieldtype": "Password",
+   "label": "Gemini API Key"
+  },
+  {
+   "fieldname": "api_setup_help",
+   "fieldtype": "HTML",
+   "label": "Setup Help",
+   "options": "<p>Get API keys from <a href=\"https://console.groq.com\" target=\"_blank\">Groq Console</a>, <a href=\"https://platform.openai.com\" target=\"_blank\">OpenAI Platform</a>, or <a href=\"https://aistudio.google.com\" target=\"_blank\">Google AI Studio</a>. Keys in site_config.json are used as fallback.</p>"
+  },
+  {
+   "fieldname": "analyze_tab",
+   "fieldtype": "Tab Break",
+   "label": "Advisor"
+  },
+  {
+   "default": "1",
+   "fieldname": "analyze_enabled",
+   "fieldtype": "Check",
+   "label": "Enable Advisor Tab"
+  },
+  {
+   "default": "llama-3.3-70b-versatile",
+   "fieldname": "analyze_model",
+   "fieldtype": "Data",
+   "label": "Advisor Model"
+  },
+  {
+   "default": "5",
+   "fieldname": "analyze_max_passes",
+   "fieldtype": "Int",
+   "label": "Agent Max Passes"
+  },
+  {
+   "default": "900",
+   "fieldname": "analyze_max_tokens",
+   "fieldtype": "Int",
+   "label": "Max Tokens (Tool Turns)"
+  },
+  {
+   "default": "600",
+   "fieldname": "analyze_max_tokens_final",
+   "fieldtype": "Int",
+   "label": "Max Tokens (Final Reply)"
+  },
+  {
+   "fieldname": "column_break_analyze",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0.25",
+   "fieldname": "analyze_temperature",
+   "fieldtype": "Float",
+   "label": "Explain Temperature"
+  },
+  {
+   "default": "0.2",
+   "fieldname": "diagnose_temperature",
+   "fieldtype": "Float",
+   "label": "Diagnose Temperature"
+  },
+  {
+   "default": "7000",
+   "fieldname": "context_char_budget",
+   "fieldtype": "Int",
+   "label": "Context Character Budget"
+  },
+  {
+   "default": "1",
+   "fieldname": "enable_document_checks",
+   "fieldtype": "Check",
+   "label": "Enable Document Checks"
+  },
+  {
+   "fieldname": "section_break_analyze_limits",
+   "fieldtype": "Section Break",
+   "label": "Tool Limits"
+  },
+  {
+   "default": "3",
+   "fieldname": "max_linked_docs",
+   "fieldtype": "Int",
+   "label": "Max Linked Documents"
+  },
+  {
+   "default": "8",
+   "fieldname": "max_linked_fields",
+   "fieldtype": "Int",
+   "label": "Max Fields per Linked Doc"
+  },
+  {
+   "default": "15",
+   "fieldname": "max_gl_rows",
+   "fieldtype": "Int",
+   "label": "Max GL Rows"
+  },
+  {
+   "default": "25",
+   "fieldname": "max_list_rows",
+   "fieldtype": "Int",
+   "label": "Max List Rows"
+  },
+  {
+   "default": "30",
+   "fieldname": "max_report_rows",
+   "fieldtype": "Int",
+   "label": "Max Report Rows"
+  },
+  {
+   "default": "5",
+   "fieldname": "max_timeline_items",
+   "fieldtype": "Int",
+   "label": "Max Timeline Items"
+  },
+  {
+   "default": "6000",
+   "fieldname": "max_tool_json_chars",
+   "fieldtype": "Int",
+   "label": "Max Tool JSON Characters"
+  },
+  {
+   "fieldname": "build_tab",
+   "fieldtype": "Tab Break",
+   "label": "Build"
+  },
+  {
+   "default": "1",
+   "fieldname": "build_enabled",
+   "fieldtype": "Check",
+   "label": "Enable Build Tab"
+  },
+  {
+   "default": "llama-3.3-70b-versatile",
+   "fieldname": "build_model",
+   "fieldtype": "Data",
+   "label": "Build Model"
+  },
+  {
+   "default": "1400",
+   "fieldname": "build_max_tokens",
+   "fieldtype": "Int",
+   "label": "Build Max Tokens"
+  },
+  {
+   "default": "500",
+   "fieldname": "build_max_tokens_fallback",
+   "fieldtype": "Int",
+   "label": "Build Max Tokens (Fallback)"
+  },
+  {
+   "fieldname": "column_break_build",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0.15",
+   "fieldname": "build_temperature",
+   "fieldtype": "Float",
+   "label": "Build Temperature"
+  },
+  {
+   "default": "0.3",
+   "fieldname": "build_temperature_fallback",
+   "fieldtype": "Float",
+   "label": "Build Temperature (Fallback)"
+  },
+  {
+   "default": "5",
+   "fieldname": "preview_expiry_minutes",
+   "fieldtype": "Int",
+   "label": "Preview Expiry (Minutes)"
+  },
+  {
+   "description": "Leave empty to restrict Build to System Manager only.",
+   "fieldname": "build_allowed_roles",
+   "fieldtype": "Table",
+   "label": "Build Allowed Roles",
+   "options": "Pilot Allowed Role"
+  },
+  {
+   "fieldname": "advanced_tab",
+   "fieldtype": "Tab Break",
+   "label": "Advanced"
+  },
+  {
+   "fieldname": "custom_analyze_prompt",
+   "fieldtype": "Small Text",
+   "label": "Custom Analyze Prompt (Appended)"
+  },
+  {
+   "description": "Comma-separated tool names to disable.",
+   "fieldname": "disabled_analyze_tools",
+   "fieldtype": "Small Text",
+   "label": "Disabled Analyze Tools"
+  },
+  {
+   "default": "0",
+   "fieldname": "debug_log_tool_calls",
+   "fieldtype": "Check",
+   "label": "Debug Log Tool Calls"
+  }
+ ],
+ "icon": "fa fa-magic",
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-06-07 02:48:04.310702",
+ "modified_by": "Administrator",
+ "module": "Frappe Pilot",
+ "name": "Pilot Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "read": 1,
+   "role": "System Manager",
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

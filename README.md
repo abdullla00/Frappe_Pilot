@@ -1,22 +1,31 @@
-# Forge AI Assistant for ERPNext
+# Frappe Pilot AI Assistant
 
 **v1.0** — An AI-powered assistant embedded natively inside ERPNext as a Frappe custom app. It lives as a resizable sidebar on every page — no tab switching, no separate tools.
 
-Built as two agents in one sidebar: a **Guide Agent** that answers ERPNext questions in context, and a **Coding Agent** that makes real, validated changes to the system from plain English.
+Built as two top-level capabilities: an **Advisor** tab (merged Analyze + Guide) that reads, explains, and navigates the current page, and a **Build** tab with **Chat** and **Changes** (change log) subtabs.
 
-![Forge AI Assistant Sidebar](screenshot_ai.png)
+![Frappe Pilot Sidebar](screenshot_ai.png)
 
 ---
 
 ## What It Does
 
-### Guide Tab
-Answers any question about ERPNext in plain language. Knows exactly what page you are on — form, list view, report, or module — and gives context-aware answers with suggested follow-up questions. Explains DocTypes, workflows, permissions, scripts, and any ERPNext concept without requiring technical knowledge.
+### Advisor Tab (default)
+Reads and analyzes the **specific page or document** you are viewing using a **read-only tool-using agent**, with Guide-style ERPNext navigation knowledge merged in. It fetches data on demand, runs deterministic issue checks, and can surface **clickable desk links** to documents, lists, reports, and setup pages.
 
-Context resets automatically when you navigate to a different page so old page context never bleeds into new answers.
+- **Open document** — field values, child tables, linked docs, GL entries, workflow state, timeline, automated checks
+- **New form** — required fields and form structure from DocType meta
+- **List view** — fetches filtered sample rows and counts via `get_list_sample` / `get_list_count`
+- **Report** — runs the report with current browser filters via `run_report_sample` (up to 30 rows)
+- **Diagnose mode** — triggered by "Diagnose this record" or similar chips; returns Findings / Evidence / Likely cause / What to verify
+- **Context-aware suggestion chips** — welcome and follow-up chips adapt to the current form, list, report, or module (e.g. Sales Invoice shows payment/GL/diagnose chips; Pilot Settings shows setup-specific prompts). Logic lives in [`api/suggestions.py`](frappe_pilot/api/suggestions.py) registries — extend the same way as `CHECK_REGISTRY` in `doc_checks.py`.
+- **Pilot languages** — In **Pilot Settings > General > Pilot Languages**, **English** is seeded as the first row (required, not removable). Link additional Frappe **Language** rows (e.g. **Kurdish Sorani** / `ckb`, **Arabic** / `ar` / العربية) and check **Enabled**. Only **Enabled** rows appear in the sidebar locale toggle and receive localized suggestion chips / Build cards (when Pilot has a chip catalog for that locale). **Suggestion Chip Languages** (`all_enabled` default, `active_locale`, `active_plus_en`) controls how many locale rows appear in chips. Sorani and Arabic get full UI + split chips when enabled. Other languages use English sidebar chrome with LLM replies in that language. Catalog in [`utils/i18n.py`](frappe_pilot/utils/i18n.py).
+- **Smart navigation** — Advisor replies can include desk links. **Pilot Settings > Navigation**: auto-navigate on "go to" requests; optionally close sidebar after navigation.
+
+Evidence line under each reply shows which tools ran and how many issues were found. Conversation history resets when you navigate to a different page.
 
 ### Build Tab
-Turns plain English into real ERPNext customisations — with a mandatory preview and confirm step before anything touches the database.
+Turns plain English into real ERPNext customisations — with a mandatory preview and confirm step before anything touches the database. The welcome capability grid is context-aware: on a Sales Invoice form, quick actions prefill prompts with that DocType.
 
 **The flow:**
 ```
@@ -39,8 +48,8 @@ Green success card with Undo button
 
 Nothing touches the database until you confirm.
 
-### History Tab
-Every change the agent has applied is listed here with its type, target DocType, and timestamp. Every entry has an Undo button. Rolled-back items are shown with a strikethrough so the audit trail is never erased.
+### Build > Changes
+Every change the Build agent has applied is listed here with its type, target DocType, and timestamp. Every entry has an Undo button. Rolled-back items are shown with a strikethrough so the audit trail is never erased.
 
 ---
 
@@ -86,7 +95,7 @@ The **Undo** button calls `rollback()` — deletes the created record from ERPNe
 
 | Layer | Technology |
 |---|---|
-| Framework | Frappe v15 / ERPNext v15 |
+| Framework | Frappe v15 / ERPNext v16 |
 | LLM | Groq API — Llama 3.3-70b-versatile |
 | Tool Calling | Groq OpenAI-compatible function calling |
 | Validation | Pydantic v2 |
@@ -100,14 +109,15 @@ The **Undo** button calls `rollback()` — deletes the created record from ERPNe
 ## Architecture
 
 ```
-frappe_ai_assistant/
+frappe_pilot/
 ├── public/js/
 │   └── ai_sidebar.js               ← entire frontend — injected into every ERPNext page
 ├── api/
-│   ├── guide.py                    ← Guide Agent — Groq chat with page-context awareness
-│   └── coding_agent.py             ← Coding Agent — tool-calling loop, validation,
-│                                      execution, change log, and rollback
-└── frappe_ai_assistant/
+│   ├── analyze.py                  ← Advisor API — merged analyze + guide with navigation
+│   ├── context_utils.py            ← Shared doc/meta/route context helpers
+│   ├── guide.py                    ← Deprecated shim → analyze.chat
+│   └── coding_agent.py             ← Build Agent — tool-calling, validation, rollback
+└── frappe_pilot/
     └── doctype/
         └── ai_change_log/          ← Audit trail DocType
 ```
@@ -116,7 +126,7 @@ frappe_ai_assistant/
 
 One line in `hooks.py`:
 ```python
-app_include_js = "/assets/frappe_ai_assistant/js/ai_sidebar.js"
+app_include_js = "/assets/frappe_pilot/js/ai_sidebar.js"
 ```
 
 Frappe loads this on every desk page. The JS reads `frappe.cur_frm` and `frappe.get_route()` to know exactly what the user is looking at and passes that context to every LLM call.
@@ -173,10 +183,10 @@ This context is injected as a prefix into every Guide message so the LLM cannot 
 
 ```bash
 # Get the app
-bench get-app https://github.com/yourusername/frappe_ai_assistant
+bench get-app https://github.com/yourusername/frappe_pilot
 
 # Install on your site
-bench --site yoursite.localhost install-app frappe_ai_assistant
+bench --site yoursite.localhost install-app frappe_pilot
 
 # Run migrations (creates the AI Change Log table)
 bench --site yoursite.localhost migrate
@@ -185,24 +195,31 @@ bench --site yoursite.localhost migrate
 ./env/bin/pip install groq
 
 # Build assets
-bench build --app frappe_ai_assistant
+bench build --app frappe_pilot
 
 # Restart
 bench restart
 ```
 
-**Add your Groq API key to site_config.json:**
-```json
-{
-  "groq_api_key": "gsk_your_key_here"
-}
-```
+### Pilot Settings (desk UI)
 
-Optionally add a second key as a rate-limit fallback:
+Open **Pilot Settings** (desk search or the gear icon in the Pilot sidebar header) to configure:
+
+- **General** — enable/disable Pilot, default tab, **sidebar position** (Right / Left / Bottom), allowed roles. Users can override position per browser via the dock picker in the sidebar header; ↺ resets to the site default.
+- **API Keys** — Groq, OpenAI, Gemini password fields (with site_config fallback)
+- **Analyze / Guide / Build** — models, token limits, temperatures, tool row caps
+- **Advanced** — custom analyze prompt, disabled tools, debug logging
+
+If no API key is configured, opening Pilot shows a setup screen with a **Configure API Keys** button (System Manager only).
+
+**API keys** can be set in Pilot Settings **or** `site_config.json` (Settings fields take precedence):
+
 ```json
 {
-  "groq_api_key":   "gsk_primary_key",
-  "groq_api_key_2": "gsk_backup_key"
+  "groq_api_key": "gsk_your_key_here",
+  "groq_api_key_2": "gsk_backup_key",
+  "openai_api_key": "sk-...",
+  "gemini_api_key": "..."
 }
 ```
 
@@ -211,10 +228,10 @@ Optionally add a second key as a rate-limit fallback:
 ## Usage
 
 1. Open any page in ERPNext
-2. Click the **Forge** tab on the right edge of the screen (or press **Alt+A**)
-3. Use the **Guide** tab to ask any question about ERPNext
-4. Use the **Build** tab to create customisations in plain English
-5. Use the **History** tab to review or undo past changes
+2. Click the **Pilot** tab on the right edge of the screen
+3. Use **Advisor** to summarize, diagnose, or ask how-to questions about the current page
+4. Use **Build > Chat** to create customisations in plain English
+5. Use **Build > Changes** to review or undo past Build changes
 
 **Example prompts for the Build tab:**
 ```
@@ -232,7 +249,8 @@ Seed the Fleet Vehicle DocType with 3 sample records
 | Cannot | Why |
 |---|---|
 | Edit or delete existing fields or scripts | Creates only — no update tools yet |
-| Search or read your business data | No query tools in this version |
+| Read full report result rows | Analyze uses route metadata only for reports in v1 |
+| Search across all business data | No global query tools — Analyze reads the open document only |
 | Create Print Formats, Email Templates, Reports | Not yet implemented |
 | Chain two write actions in one confirm | Each tool call is its own preview and confirm cycle |
 
@@ -243,7 +261,9 @@ Seed the Fleet Vehicle DocType with 3 sample records
 - [ ] Edit and delete existing customisations
 - [ ] Print Format generation
 - [ ] Email Template creation
-- [ ] Query tool — read and summarise business data
+- [x] Advisor tab — merged analyze + guide with smart navigation
+- [ ] Report filter + column context in Advisor
+- [ ] List row selection context in Advisor
 - [ ] Multi-step tool chains in a single conversation turn
 - [ ] Support for Claude and OpenAI alongside Groq
 

@@ -523,6 +523,13 @@ def _get_groq_client():
 	return None, None
 
 
+def _coding_system_prompt():
+	from frappe_pilot.utils.i18n import get_llm_language_instruction
+	from frappe_pilot.utils.settings import get_enabled_languages
+
+	return CODING_SYSTEM_PROMPT + get_llm_language_instruction(get_enabled_languages())
+
+
 @frappe.whitelist()
 def chat(message, history="", doctype="", docname=""):
 	"""
@@ -532,15 +539,21 @@ def chat(message, history="", doctype="", docname=""):
 	Accepts an optional `history` JSON array of prior {role, content} pairs
 	so the LLM retains context across multiple turns in the same session.
 	"""
-	client, key_label = _get_groq_client()
-	if not client:
-		return _err(
-			"Groq API key not configured. "
-			"Add <code>groq_api_key</code> to your site_config.json."
-		)
+	from frappe_pilot.utils.llm import chat_completion, get_active_provider, has_api_key
+	from frappe_pilot.utils.settings import get_build_config, user_has_build_access
 
-	if "System Manager" not in frappe.get_roles():
-		return _err("The Coding Agent requires the System Manager role.")
+	build_cfg = get_build_config()
+	if not build_cfg.get("enabled"):
+		return _err("The Build tab is disabled in Pilot Settings.")
+
+	if not user_has_build_access():
+		return _err("You do not have permission to use the Build agent.")
+
+	if not has_api_key():
+		return {"reply": None, "needs_api_setup": True, "preview": None}
+
+	if get_active_provider() not in ("Groq", "OpenAI"):
+		return _err("Build agent requires Groq or OpenAI as the active LLM provider.")
 
 	# Parse conversation history for multi-turn context (last 7 pairs = 14 msgs)
 	history_msgs = []
@@ -556,36 +569,28 @@ def chat(message, history="", doctype="", docname=""):
 		except Exception:
 			pass
 
+	from frappe_pilot.utils.i18n import detect_user_locale, locale_context_note
+	from frappe_pilot.utils.settings import get_enabled_languages
+
+	user_locale = detect_user_locale(message, get_enabled_languages())
+	user_content = locale_context_note(user_locale) + message
+
 	messages = [
-		{"role": "system", "content": CODING_SYSTEM_PROMPT},
+		{"role": "system", "content": _coding_system_prompt()},
 		*history_msgs,
-		{"role": "user",   "content": message},
+		{"role": "user", "content": user_content},
 	]
 
 	def _call_llm(msgs, use_tools=True):
-		"""Call the LLM, switching to the backup key on rate limit."""
-		nonlocal client, key_label
-		kwargs = dict(
-			model="llama-3.3-70b-versatile",
+		response, _, _ = chat_completion(
 			messages=msgs,
-			max_tokens=1400 if use_tools else 500,
-			temperature=0.15 if use_tools else 0.3,
+			model=build_cfg["model"],
+			max_tokens=build_cfg["max_tokens"] if use_tools else build_cfg["max_tokens_fallback"],
+			temperature=build_cfg["temperature"] if use_tools else build_cfg["temperature_fallback"],
+			tools=TOOLS if use_tools else None,
+			tool_choice="auto" if use_tools else None,
 		)
-		if use_tools:
-			kwargs["tools"]       = TOOLS
-			kwargs["tool_choice"] = "auto"
-		try:
-			return client.chat.completions.create(**kwargs)
-		except Exception as exc:
-			exc_str = str(exc)
-			if ("rate_limit_exceeded" in exc_str or "429" in exc_str) and key_label == "primary":
-				backup_key = frappe.conf.get("groq_api_key_2")
-				if backup_key:
-					from groq import Groq as _Groq
-					client    = _Groq(api_key=backup_key)
-					key_label = "backup"
-					return client.chat.completions.create(**kwargs)
-			raise
+		return response
 
 	# Tool-calling loop — supports read → write patterns (up to 4 LLM calls)
 	for _pass in range(4):
@@ -682,10 +687,11 @@ def chat(message, history="", doctype="", docname=""):
 			return _err(f"Validation error: {exc}")
 
 		session_key = frappe.generate_hash(length=24)
+		expiry_sec = int(build_cfg.get("preview_expiry_minutes", 5)) * 60
 		frappe.cache().set_value(
 			f"ai_coding_{session_key}",
 			{"tool": tool_name, "args": validated, "user": frappe.session.user},
-			expires_in_sec=300,
+			expires_in_sec=expiry_sec,
 		)
 
 		return {
@@ -1069,11 +1075,11 @@ def _apply_create_doctype(args):
 		autoname = AUTONAME_MAP.get(naming_rule, "")
 
 	# Resolve our app's module — fall back to hardcoded value
-	module = "Frappe Ai Assistant"
+	module = "Frappe Pilot"
 	try:
 		found = frappe.get_all(
 			"Module Def",
-			filters={"app_name": "frappe_ai_assistant"},
+			filters={"app_name": "frappe_pilot"},
 			pluck="name",
 			limit=1,
 		)
@@ -1108,7 +1114,7 @@ def _apply_create_doctype(args):
 	snake_name  = name.lower().replace(" ", "_")
 	pascal_name = "".join(w.title() for w in name.split())
 
-	app_path    = pathlib.Path(frappe.get_app_path("frappe_ai_assistant"))
+	app_path    = pathlib.Path(frappe.get_app_path("frappe_pilot"))
 	doctype_dir = app_path / "doctype"
 	doctype_dir.mkdir(parents=True, exist_ok=True)
 	# Ensure the doctype/ package itself is importable
