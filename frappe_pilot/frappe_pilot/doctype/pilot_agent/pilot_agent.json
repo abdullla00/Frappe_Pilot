@@ -1,0 +1,224 @@
+{
+ "actions": [],
+ "creation": "2026-06-26 00:00:00",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "links": [],
+ "modified": "2026-06-26 00:00:00",
+ "modified_by": "Administrator",
+ "module": "Frappe Pilot",
+ "name": "Pilot Agent",
+ "owner": "Administrator",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "field_order": [
+  "general_tab",
+  "agent_name",
+  "description",
+  "column_break_general",
+  "provider",
+  "model",
+  "temperature",
+  "execution_mode",
+  "execution_mode_locked",
+  "column_break_general_2",
+  "is_system_agent",
+  "system_agent_key",
+  "disabled",
+  "instructions_tab",
+  "instructions",
+  "tools_tab",
+  "agent_tool",
+  "context_tab",
+  "linked_doctypes",
+  "linked_modules",
+  "knowledge_tab",
+  "agent_knowledge",
+  "integrations_tab",
+  "agent_mcp_server",
+  "permissions_tab",
+  "allowed_roles",
+  "allowed_users",
+  "agent_roles"
+ ],
+ "fields": [
+  {
+   "fieldname": "general_tab",
+   "fieldtype": "Tab Break",
+   "label": "General"
+  },
+  {
+   "fieldname": "agent_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Agent Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Description"
+  },
+  {
+   "fieldname": "column_break_general",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "provider",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Provider",
+   "options": "LLM Provider",
+   "reqd": 1
+  },
+  {
+   "fieldname": "model",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Model",
+   "options": "Pilot LLM Model",
+   "reqd": 1
+  },
+  {
+   "default": "0.2",
+   "fieldname": "temperature",
+   "fieldtype": "Float",
+   "label": "Temperature"
+  },
+  {
+   "default": "Safe",
+   "fieldname": "execution_mode",
+   "fieldtype": "Select",
+   "label": "Execution Mode",
+   "options": "Safe\nDirect"
+  },
+  {
+   "default": "0",
+   "fieldname": "execution_mode_locked",
+   "fieldtype": "Check",
+   "label": "Execution Mode Locked"
+  },
+  {
+   "fieldname": "column_break_general_2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_system_agent",
+   "fieldtype": "Check",
+   "label": "Is System Agent"
+  },
+  {
+   "fieldname": "system_agent_key",
+   "fieldtype": "Data",
+   "label": "System Agent Key"
+  },
+  {
+   "default": "0",
+   "fieldname": "disabled",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Disabled"
+  },
+  {
+   "fieldname": "instructions_tab",
+   "fieldtype": "Tab Break",
+   "label": "Instructions"
+  },
+  {
+   "fieldname": "instructions",
+   "fieldtype": "Code",
+   "label": "Instructions",
+   "options": "Markdown"
+  },
+  {
+   "fieldname": "tools_tab",
+   "fieldtype": "Tab Break",
+   "label": "Tools"
+  },
+  {
+   "fieldname": "agent_tool",
+   "fieldtype": "Table",
+   "label": "Agent Tools",
+   "options": "Pilot Agent Tool"
+  },
+  {
+   "fieldname": "context_tab",
+   "fieldtype": "Tab Break",
+   "label": "Context"
+  },
+  {
+   "fieldname": "linked_doctypes",
+   "fieldtype": "Table",
+   "label": "Linked DocTypes",
+   "options": "Pilot Agent Linked DocType"
+  },
+  {
+   "fieldname": "linked_modules",
+   "fieldtype": "Table",
+   "label": "Linked Modules",
+   "options": "Pilot Agent Linked Module"
+  },
+  {
+   "fieldname": "knowledge_tab",
+   "fieldtype": "Tab Break",
+   "label": "Knowledge"
+  },
+  {
+   "fieldname": "agent_knowledge",
+   "fieldtype": "Table",
+   "label": "Knowledge Sources",
+   "options": "Pilot Agent Knowledge"
+  },
+  {
+   "fieldname": "integrations_tab",
+   "fieldtype": "Tab Break",
+   "label": "Integrations"
+  },
+  {
+   "fieldname": "agent_mcp_server",
+   "fieldtype": "Table",
+   "label": "MCP Servers",
+   "options": "Pilot Agent MCP Server"
+  },
+  {
+   "fieldname": "permissions_tab",
+   "fieldtype": "Tab Break",
+   "label": "Permissions"
+  },
+  {
+   "fieldname": "allowed_roles",
+   "fieldtype": "Table",
+   "label": "Allowed Roles",
+   "options": "Pilot Allowed Role"
+  },
+  {
+   "fieldname": "allowed_users",
+   "fieldtype": "Table",
+   "label": "Allowed Users",
+   "options": "Pilot Agent User"
+  },
+  {
+   "fieldname": "agent_roles",
+   "fieldtype": "Table",
+   "label": "Agent Roles",
+   "options": "Pilot Agent Role"
+  }
+ ],
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "read": 1,
+   "role": "System Manager",
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "allow_rename": 1,
+ "autoname": "field:agent_name",
+ "naming_rule": "By fieldname",
+ "track_changes": 1
+}

@@ -1,0 +1,75 @@
+{
+ "actions": [],
+ "creation": "2026-06-26 00:00:00",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "links": [],
+ "modified": "2026-06-26 00:00:00",
+ "modified_by": "Administrator",
+ "module": "Frappe Pilot",
+ "name": "Pilot Agent Run Feedback",
+ "owner": "Administrator",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "row_format": "Dynamic",
+ "allow_rename": 1,
+ "field_order": [
+  "feedback",
+  "comments",
+  "agent_message",
+  "agent",
+  "provider",
+  "model"
+ ],
+ "fields": [
+  {
+   "fieldname": "feedback",
+   "fieldtype": "Select",
+   "label": "Feedback",
+   "options": "\nThumbs Up\nThumbs Down",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "comments",
+   "fieldtype": "Small Text",
+   "label": "Comments"
+  },
+  {
+   "fieldname": "agent_message",
+   "fieldtype": "Link",
+   "label": "Agent Message",
+   "options": "Pilot Agent Message",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "agent",
+   "fieldtype": "Link",
+   "label": "Agent",
+   "options": "Pilot Agent"
+  },
+  {
+   "fieldname": "provider",
+   "fieldtype": "Link",
+   "label": "Provider",
+   "options": "LLM Provider",
+   "fetch_from": "agent.provider"
+  },
+  {
+   "fieldname": "model",
+   "fieldtype": "Link",
+   "label": "Model",
+   "options": "Pilot LLM Model",
+   "fetch_from": "agent.model"
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1
+  }
+ ]
+}

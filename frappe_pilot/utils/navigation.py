@@ -464,11 +464,31 @@ def detect_explain_reference_intent(message):
 
 
 def _should_enrich_nav_from_context(message):
+	from frappe_pilot.utils.advisor_intent import is_analytical_message
+
+	if is_analytical_message(message):
+		return False
 	if detect_referenced_nav_intent(message) or detect_explain_reference_intent(message):
 		return False
 	if re.search(r"\b(what is|what are|what's|explain|which)\b", message or "", re.I):
 		return False
 	return True
+
+
+def filter_self_nav_links(links, *, doctype="", docname=""):
+	"""Remove nav links pointing at the document the user already has open."""
+	if not links or not doctype or not docname:
+		return links or []
+	filtered = []
+	for item in links:
+		if (
+			(item.get("type") or item.get("nav_type")) == "form"
+			and (item.get("doctype") or item.get("target")) == doctype
+			and (item.get("name") or item.get("docname")) == docname
+		):
+			continue
+		filtered.append(item)
+	return filtered
 
 
 def _parse_reference_abbrev(message):
@@ -604,6 +624,7 @@ def process_reply_navigation(
 			report_name=report_name,
 		))
 	links = dedupe_nav_links(links)
+	links = filter_self_nav_links(links, doctype=doctype, docname=docname)
 
 	if links and detect_nav_intent(message) and len(links) == 1:
 		links[0]["primary"] = True

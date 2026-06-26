@@ -1,0 +1,157 @@
+{
+ "actions": [],
+ "creation": "2026-06-26 00:00:00",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "links": [],
+ "modified": "2026-06-26 00:00:00",
+ "modified_by": "Administrator",
+ "module": "Frappe Pilot",
+ "name": "Pilot Knowledge Source",
+ "owner": "Administrator",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "row_format": "Dynamic",
+ "allow_rename": 1,
+ "autoname": "field:source_name",
+ "naming_rule": "By fieldname",
+ "track_changes": 1,
+ "field_order": [
+  "source_name",
+  "description",
+  "column_break_1",
+  "knowledge_type",
+  "scope",
+  "storage_mode",
+  "chunk_size",
+  "chunk_overlap",
+  "embedding_model",
+  "embedding_provider",
+  "status",
+  "last_indexed_at",
+  "total_chunks",
+  "total_inputs",
+  "error_message",
+  "disabled"
+ ],
+ "fields": [
+  {
+   "fieldname": "source_name",
+   "fieldtype": "Data",
+   "label": "Source Name",
+   "reqd": 1,
+   "unique": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Description"
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "knowledge_type",
+   "fieldtype": "Select",
+   "label": "Knowledge Type",
+   "options": "sqlite_fts\nchroma",
+   "reqd": 1,
+   "default": "sqlite_fts",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "scope",
+   "fieldtype": "Select",
+   "label": "Scope",
+   "options": "Site\nWorkspace\nAgent\nGlobal",
+   "default": "Site",
+   "reqd": 1
+  },
+  {
+   "fieldname": "storage_mode",
+   "fieldtype": "Select",
+   "label": "Storage Mode",
+   "options": "Frappe File",
+   "default": "Frappe File",
+   "reqd": 1
+  },
+  {
+   "fieldname": "chunk_size",
+   "fieldtype": "Int",
+   "label": "Chunk Size",
+   "default": 512
+  },
+  {
+   "fieldname": "chunk_overlap",
+   "fieldtype": "Int",
+   "label": "Chunk Overlap",
+   "default": 50
+  },
+  {
+   "fieldname": "embedding_model",
+   "fieldtype": "Data",
+   "label": "Embedding Model",
+   "depends_on": "eval:doc.knowledge_type == 'chroma'"
+  },
+  {
+   "fieldname": "embedding_provider",
+   "fieldtype": "Link",
+   "label": "Embedding Provider",
+   "options": "LLM Provider",
+   "depends_on": "eval:doc.knowledge_type == 'chroma'"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Pending\nIndexing\nReady\nError\nRebuilding",
+   "default": "Pending",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "last_indexed_at",
+   "fieldtype": "Datetime",
+   "label": "Last Indexed At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "total_chunks",
+   "fieldtype": "Int",
+   "label": "Total Chunks",
+   "default": 0,
+   "read_only": 1
+  },
+  {
+   "fieldname": "total_inputs",
+   "fieldtype": "Int",
+   "label": "Total Inputs",
+   "default": 0,
+   "read_only": 1
+  },
+  {
+   "fieldname": "error_message",
+   "fieldtype": "Small Text",
+   "label": "Error Message",
+   "read_only": 1
+  },
+  {
+   "fieldname": "disabled",
+   "fieldtype": "Check",
+   "label": "Disabled",
+   "default": 0
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1
+  }
+ ]
+}

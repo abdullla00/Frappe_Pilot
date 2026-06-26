@@ -59,6 +59,13 @@ def run_document_checks(doctype, docname):
 	for check_fn in CHECK_REGISTRY.get(doctype, []):
 		issues.extend(check_fn(doc) or [])
 
+	for hook_fn_path in frappe.get_hooks("advisor_document_checks") or []:
+		try:
+			hook_fn = frappe.get_attr(hook_fn_path)
+			issues.extend(hook_fn(doc) or [])
+		except Exception:
+			frappe.log_error(frappe.get_traceback(), f"Advisor document check hook failed: {hook_fn_path}")
+
 	return {
 		"doctype": doctype,
 		"docname": docname,

@@ -53,8 +53,10 @@ UI_STRINGS = {
 		"trigger_label": "Pilot",
 		"trigger_title": "Open Frappe Pilot",
 		"trigger_close_label": "Close Frappe Pilot",
+		"trigger_close_short": "Close",
 		"panel_title": "Frappe Pilot",
 		"tab_advisor": "Advisor",
+		"tab_insight": "Insight",
 		"tab_build": "Build",
 		"subtab_build_chat": "Chat",
 		"subtab_changes": "Changes",
@@ -68,6 +70,7 @@ UI_STRINGS = {
 		"placeholder_build_form": "Add a field, script, or workflow for {doctype}…",
 		"placeholder_build_list": "Build something for {doctype}…",
 		"placeholder_build_page": "Describe a field, DocType, or automation…",
+		"placeholder_insight": "Ask about business performance, reports, or KPIs…",
 		"settings_gear_title": "Pilot Settings",
 		"setup_title": "Pilot isn't connected yet",
 		"setup_desc": "Add an API key to unlock AI advisor, guided help, and build tools inside ERPNext.",
@@ -75,6 +78,7 @@ UI_STRINGS = {
 		"setup_secondary_sm": "Or set keys in site_config.json for server deployments.",
 		"setup_secondary_user": "Contact your System Manager to configure Pilot and add an API key.",
 		"typing_advisor": "Analyzing…",
+		"typing_insight": "Generating insight…",
 		"typing_build": "Thinking…",
 		"nav_go_to": "Go to {label}",
 		"nav_open": "Open {label}",
@@ -85,13 +89,35 @@ UI_STRINGS = {
 		"position_left": "Dock left",
 		"position_bottom": "Dock bottom",
 		"position_reset_default": "Reset to site default",
+		"insight_save_snapshot": "Save snapshot",
+		"insight_open_report": "Open report",
+		"insight_copy_table": "Copy table",
+		"insight_new_conversation": "New conversation",
+		"insight_evidence": "Based on: {sources}",
+		"insight_partial_results": "Partial results",
+		"insight_sections_count": "{count} sections",
+		"insight_sql_denied": "Read-only SQL is not available",
+		"insight_doctype_excluded": "This DocType is excluded from Insight",
+		"advisor_new_conversation": "Clear conversation",
+		"advisor_chip_group_record": "This record",
+		"advisor_chip_group_howto": "How to",
+		"advisor_card_item": "Item",
+		"advisor_card_calculation": "Calculation",
+		"advisor_card_amount": "Amount",
+		"advisor_card_assumptions": "Assumptions",
+		"advisor_card_findings": "Findings",
+		"advisor_card_evidence": "Evidence",
+		"advisor_card_verify": "What to verify",
+		"advisor_card_copy": "Copy breakdown",
 	},
 	"ckb": {
 		"trigger_label": "پایلۆت",
 		"trigger_title": "کردنەوەی Frappe Pilot",
 		"trigger_close_label": "داخستنی Frappe Pilot",
+		"trigger_close_short": "داخستن",
 		"panel_title": "Frappe Pilot",
 		"tab_advisor": "ڕاوێژکار",
+		"tab_insight": "تێڕوانین",
 		"tab_build": "دروستکردن",
 		"subtab_build_chat": "گفتوگۆ",
 		"subtab_changes": "گۆڕانکاری",
@@ -105,6 +131,7 @@ UI_STRINGS = {
 		"placeholder_build_form": "خانە، سکریپت یان workflow بۆ {doctype} زیاد بکە…",
 		"placeholder_build_list": "شتێک بۆ {doctype} دروست بکە…",
 		"placeholder_build_page": "خانە، DocType یان ئۆتۆمەیشن وەسف بکە…",
+		"placeholder_insight": "لەبارەی کارکردی بازرگانی، ڕاپۆرت یان KPI بپرسە…",
 		"settings_gear_title": "ڕێکخستنی پایلۆت",
 		"setup_title": "پایلۆت هێشتا پەیوەندی نییە",
 		"setup_desc": "کلیلی API زیاد بکە بۆ ڕاوێژکار، ڕێنمایی و دروستکردن لە ERPNext.",
@@ -112,6 +139,7 @@ UI_STRINGS = {
 		"setup_secondary_sm": "یان کلیل لە site_config.json دابنێ بۆ ڕاژە.",
 		"setup_secondary_user": "پەیوەندی بە بەڕێوەبەرەکەت بکە بۆ ڕێکخستنی پایلۆت.",
 		"typing_advisor": "شیکردنەوە…",
+		"typing_insight": "دروستکردنی تێڕوانین…",
 		"typing_build": "بیرکردنەوە…",
 		"nav_go_to": "بڕۆ بۆ {label}",
 		"nav_open": "بکەرەوە {label}",
@@ -122,13 +150,35 @@ UI_STRINGS = {
 		"position_left": "لای چەپ",
 		"position_bottom": "لە خوارەوە",
 		"position_reset_default": "گەڕانەوە بۆ بنەڕەتی ماڵپەڕ",
+		"insight_save_snapshot": "پاشەکەوتکردنی وێنە",
+		"insight_open_report": "کردنەوەی ڕاپۆرت",
+		"insight_copy_table": "لەبەرگرتنەوەی خشتە",
+		"insight_new_conversation": "گفتوگۆی نوێ",
+		"insight_evidence": "لەسەر بنەمای: {sources}",
+		"insight_partial_results": "ئەنجامی بەشێکی",
+		"insight_sections_count": "{count} بەش",
+		"insight_sql_denied": "SQL تەنها بۆ خوێندنەوە بەردەست نییە",
+		"insight_doctype_excluded": "ئەم DocType لە تێڕوانیندا قەدەغەیە",
+		"advisor_new_conversation": "گفتوگۆ بسڕەوە",
+		"advisor_chip_group_record": "ئەم تۆمارە",
+		"advisor_chip_group_howto": "چۆن",
+		"advisor_card_item": "کاڵا",
+		"advisor_card_calculation": "ژماردن",
+		"advisor_card_amount": "بڕ",
+		"advisor_card_assumptions": "گریمانەکان",
+		"advisor_card_findings": "دۆزینەوەکان",
+		"advisor_card_evidence": "بەڵگە",
+		"advisor_card_verify": "چی بپشکنیت",
+		"advisor_card_copy": "کۆپیکردنیوردەکاری",
 	},
 	"ar": {
 		"trigger_label": "الطيار",
 		"trigger_title": "فتح Frappe Pilot",
 		"trigger_close_label": "إغلاق Frappe Pilot",
+		"trigger_close_short": "إغلاق",
 		"panel_title": "Frappe Pilot",
 		"tab_advisor": "المستشار",
+		"tab_insight": "رؤى",
 		"tab_build": "البناء",
 		"subtab_build_chat": "محادثة",
 		"subtab_changes": "التغييرات",
@@ -142,6 +192,7 @@ UI_STRINGS = {
 		"placeholder_build_form": "أضف حقلًا أو سكربتًا أو سير عمل لـ {doctype}…",
 		"placeholder_build_list": "ابنِ شيئًا لـ {doctype}…",
 		"placeholder_build_page": "صف حقلًا أو نوع مستند أو أتمتة…",
+		"placeholder_insight": "اسأل عن أداء الأعمال أو التقارير أو مؤشرات الأداء…",
 		"settings_gear_title": "إعدادات الطيار",
 		"setup_title": "الطيار غير متصل بعد",
 		"setup_desc": "أضف مفتاح API لتفعيل المستشار والإرشاد وأدوات البناء داخل ERPNext.",
@@ -149,6 +200,7 @@ UI_STRINGS = {
 		"setup_secondary_sm": "أو ضع المفاتيح في site_config.json للنشر على الخادم.",
 		"setup_secondary_user": "تواصل مع مدير النظام لتهيئة الطيار وإضافة مفتاح API.",
 		"typing_advisor": "جارٍ التحليل…",
+		"typing_insight": "جارٍ إنشاء الرؤى…",
 		"typing_build": "جارٍ التفكير…",
 		"nav_go_to": "انتقل إلى {label}",
 		"nav_open": "افتح {label}",
@@ -159,6 +211,26 @@ UI_STRINGS = {
 		"position_left": "إرساء يسار",
 		"position_bottom": "إرساء أسفل",
 		"position_reset_default": "إعادة تعيين الافتراضي للموقع",
+		"insight_save_snapshot": "حفظ اللقطة",
+		"insight_open_report": "فتح التقرير",
+		"insight_copy_table": "نسخ الجدول",
+		"insight_new_conversation": "محادثة جديدة",
+		"insight_evidence": "بناءً على: {sources}",
+		"insight_partial_results": "نتائج جزئية",
+		"insight_sections_count": "{count} أقسام",
+		"insight_sql_denied": "SQL للقراءة فقط غير متاح",
+		"insight_doctype_excluded": "نوع المستند هذا مستبعد من الرؤى",
+		"advisor_new_conversation": "مسح المحادثة",
+		"advisor_chip_group_record": "هذا السجل",
+		"advisor_chip_group_howto": "كيف",
+		"advisor_card_item": "الصنف",
+		"advisor_card_calculation": "الحساب",
+		"advisor_card_amount": "المبلغ",
+		"advisor_card_assumptions": "الافتراضات",
+		"advisor_card_findings": "النتائج",
+		"advisor_card_evidence": "الدليل",
+		"advisor_card_verify": "ما يجب التحقق منه",
+		"advisor_card_copy": "نسخ التفاصيل",
 	},
 }
 
@@ -178,7 +250,22 @@ CHIP_TRANSLATIONS_CKB = {
 	"Can I submit this?": "دەتوانم بنێرم؟",
 	"What to fix before submit?": "پێش ناردن چی چاک بکەم؟",
 	"Summarize draft": "پوختەی ڕەشنووس",
-	"Summarize this order": "پوختەی ئەم داواکارییە",
+	"Summarize this quotation": "پوختەی ئەم نرخنامەیە",
+	"Calculate for 4 days": "ژماردن بۆ ٤ ڕۆژ",
+	"Calculate for 7 days": "ژماردن بۆ ٧ ڕۆژ",
+	"Calculate for 14 days": "ژماردن بۆ ١٤ ڕۆژ",
+	"Convert to Sales Order": "گۆڕین بۆ داواکاری فرۆشتن",
+	"Summarize this job": "پوختەی ئەم کارە",
+	"Linked tickets?": "تکتە پەیوەندیدارەکان؟",
+	"Explain days charged": "ڕوونکردنەوەی ڕۆژە ژماردراوەکان",
+	"Summarize this ticket": "پوختەی ئەم تکتە",
+	"Linked Job Order?": "فەرمانی کاری پەیوەندیدار؟",
+	"Summarize this rental order": "پوختەی داواکاری کرێ",
+	"Summarize this delivery": "پوختەی گەیاندن",
+	"Summarize this return": "پوختەی گەڕاندنەوە",
+	"Summarize this inspection": "پوختەی پشکنین",
+	"What is this quotation for?": "ئەم نرخنامەیە بۆ چییە؟",
+	"How do rental lines work?": "هێڵەکانی کرێ چۆن کاردەکەن؟",
 	"Summarize current settings": "پوختەی ڕێکخستنەکان",
 	"Check payment status": "دۆخی پارەدان بپشکنە",
 	"Verify GL entries": "تۆمارە گشتییەکان بپشکنە",
@@ -295,6 +382,22 @@ CHIP_TRANSLATIONS_AR = {
 	"What to fix before submit?": "ماذا أصلح قبل الإرسال؟",
 	"Summarize draft": "لخّص المسودة",
 	"Summarize this order": "لخّص هذا الطلب",
+	"Summarize this quotation": "لخّص عرض السعر",
+	"Calculate for 4 days": "احسب لـ 4 أيام",
+	"Calculate for 7 days": "احسب لـ 7 أيام",
+	"Calculate for 14 days": "احسب لـ 14 يوماً",
+	"Convert to Sales Order": "تحويل إلى أمر بيع",
+	"Summarize this job": "لخّص أمر العمل",
+	"Linked tickets?": "التذاكر المرتبطة؟",
+	"Explain days charged": "اشرح الأيام المحتسبة",
+	"Summarize this ticket": "لخّص هذه التذكرة",
+	"Linked Job Order?": "أمر العمل المرتبط؟",
+	"Summarize this rental order": "لخّص أمر الإيجار",
+	"Summarize this delivery": "لخّص التسليم",
+	"Summarize this return": "لخّص الإرجاع",
+	"Summarize this inspection": "لخّص الفحص",
+	"What is this quotation for?": "ما غرض عرض السعر؟",
+	"How do rental lines work?": "كيف تعمل بنود الإيجار؟",
 	"Summarize current settings": "لخّص الإعدادات الحالية",
 	"Check payment status": "تحقق من حالة الدفع",
 	"Verify GL entries": "تحقق من قيود دفتر الأستاذ",
@@ -388,11 +491,29 @@ def get_ui_bundle(langs):
 	return bundle
 
 
+def _chip_prompt_text(chip) -> str:
+	if isinstance(chip, dict):
+		return chip.get("prompt") or chip.get("label") or ""
+	return chip or ""
+
+
 def chip_mode(prompt_en):
-	return "diagnose" if prompt_en in DIAGNOSE_PROMPTS else "explain"
+	prompt = _chip_prompt_text(prompt_en)
+	if isinstance(prompt_en, dict) and prompt_en.get("mode"):
+		return prompt_en["mode"]
+	return "diagnose" if prompt in DIAGNOSE_PROMPTS else "explain"
 
 
 def _english_chip(prompt_en):
+	if isinstance(prompt_en, dict):
+		label = prompt_en.get("label") or prompt_en.get("prompt") or ""
+		return {
+			"prompt": prompt_en.get("prompt") or label,
+			"label": label,
+			"locale": prompt_en.get("locale") or "en",
+			"mode": chip_mode(prompt_en),
+			"preset_id": prompt_en.get("preset_id") or "",
+		}
 	return {
 		"prompt": prompt_en,
 		"label": prompt_en,
@@ -402,15 +523,16 @@ def _english_chip(prompt_en):
 
 
 def _localized_chip(prompt_en, locale):
+	prompt = _chip_prompt_text(prompt_en)
 	catalog = LOCALE_CHIP_TRANSLATIONS.get(locale) or {}
-	label = catalog.get(prompt_en, "")
+	label = catalog.get(prompt, "")
 	if not label:
 		return None
 	return {
 		"prompt": label,
 		"label": label,
 		"locale": locale,
-		"prompt_en": prompt_en,
+		"prompt_en": prompt,
 		"mode": chip_mode(prompt_en),
 	}
 
@@ -418,6 +540,12 @@ def _localized_chip(prompt_en, locale):
 def expand_split_chips(prompts_en, langs, *, max_en=4):
 	"""Single-language chips: up to max_en EN, or SPLIT_CHIP_PAIRS EN + paired locale chips."""
 	prompts_en = [p for p in (prompts_en or []) if p]
+	if not prompts_en:
+		return []
+
+	if any(isinstance(p, dict) for p in prompts_en):
+		return [_english_chip(p) for p in prompts_en[:max_en]]
+
 	chip_locales = [loc for loc in PILOT_CHIP_LOCALES if loc in langs]
 	if not chip_locales:
 		return [_english_chip(p) for p in prompts_en[:max_en]]
@@ -604,6 +732,14 @@ def build_chip_meta(chips):
 				key = chip.get("prompt_en") or chip.get("prompt") or ""
 				meta[key] = {"mode": "diagnose"}
 				meta[chip.get("prompt") or ""] = {"mode": "diagnose"}
+			elif chip.get("mode") == "insight_preset" or chip.get("preset_id"):
+				key = chip.get("prompt_en") or chip.get("prompt") or chip.get("label") or ""
+				entry = {
+					"mode": "insight_preset",
+					"preset_id": chip.get("preset_id") or "",
+				}
+				meta[key] = entry
+				meta[chip.get("prompt") or chip.get("label") or ""] = entry
 		elif chip in DIAGNOSE_PROMPTS:
 			meta[chip] = {"mode": "diagnose"}
 	return meta

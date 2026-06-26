@@ -1,0 +1,94 @@
+{
+ "actions": [],
+ "creation": "2026-06-26 00:00:00",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "links": [],
+ "modified": "2026-06-26 00:00:00",
+ "modified_by": "Administrator",
+ "module": "Frappe Pilot",
+ "name": "Pilot Agent Orchestration",
+ "owner": "Administrator",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "row_format": "Dynamic",
+ "autoname": "hash",
+ "naming_rule": "Random",
+ "allow_rename": 1,
+ "field_order": [
+  "agent",
+  "status",
+  "current_step",
+  "conversation",
+  "parent_run",
+  "last_run_at",
+  "error_log",
+  "agent_orchestration_plan",
+  "scratchpad"
+ ],
+ "fields": [
+  {
+   "fieldname": "agent",
+   "fieldtype": "Link",
+   "label": "Agent",
+   "options": "Pilot Agent"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Planned\nRunning\nPaused\nCompleted\nFailed\nCancelled",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "current_step",
+   "fieldtype": "Int",
+   "label": "Current Step"
+  },
+  {
+   "fieldname": "conversation",
+   "fieldtype": "Link",
+   "label": "Conversation",
+   "options": "Pilot Agent Conversation",
+   "read_only": 1
+  },
+  {
+   "fieldname": "parent_run",
+   "fieldtype": "Link",
+   "label": "Parent Run",
+   "options": "Pilot Agent Run",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_run_at",
+   "fieldtype": "Datetime",
+   "label": "Last Run"
+  },
+  {
+   "fieldname": "error_log",
+   "fieldtype": "Small Text",
+   "label": "Error Log"
+  },
+  {
+   "fieldname": "agent_orchestration_plan",
+   "fieldtype": "Table",
+   "label": "Plan",
+   "options": "Pilot Agent Orchestration Plan"
+  },
+  {
+   "fieldname": "scratchpad",
+   "fieldtype": "Code",
+   "label": "Scratchpad"
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1
+  }
+ ]
+}

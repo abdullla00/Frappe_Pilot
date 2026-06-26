@@ -1,0 +1,57 @@
+{
+ "actions": [],
+ "creation": "2026-06-26 00:00:00",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "links": [],
+ "modified": "2026-06-26 00:00:00",
+ "modified_by": "Administrator",
+ "module": "Frappe Pilot",
+ "name": "Pilot Agent MCP Server",
+ "owner": "Administrator",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "row_format": "Dynamic",
+ "istable": 1,
+ "editable_grid": 1,
+ "field_order": [
+  "mcp_server",
+  "enabled",
+  "server_url",
+  "tool_count"
+ ],
+ "fields": [
+  {
+   "fieldname": "mcp_server",
+   "fieldtype": "Link",
+   "label": "MCP Server",
+   "options": "Pilot MCP Server",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "Enabled",
+   "default": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "server_url",
+   "fieldtype": "Data",
+   "label": "Server URL",
+   "fetch_from": "mcp_server.server_url",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "tool_count",
+   "fieldtype": "Int",
+   "label": "Tools",
+   "read_only": 1,
+   "in_list_view": 1
+  }
+ ],
+ "permissions": []
+}

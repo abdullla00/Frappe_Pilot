@@ -15,7 +15,7 @@ DEFAULTS = {
 	"auto_navigate": 0,
 	"close_sidebar_on_navigate": 0,
 	"show_evidence_line": 1,
-	"llm_provider": "Groq",
+	"llm_failover_mode": "Both",
 	"analyze_enabled": 1,
 	"analyze_model": "llama-3.3-70b-versatile",
 	"analyze_max_passes": 5,
@@ -25,6 +25,11 @@ DEFAULTS = {
 	"diagnose_temperature": 0.2,
 	"context_char_budget": 7000,
 	"enable_document_checks": 1,
+	"advisor_brief_replies": 1,
+	"advisor_show_context_bar": 1,
+	"advisor_group_chips": 1,
+	"advisor_followup_chips": 1,
+	"advisor_persist_chat_on_route": 0,
 	"max_linked_docs": 3,
 	"max_linked_fields": 8,
 	"max_gl_rows": 15,
@@ -46,6 +51,25 @@ DEFAULTS = {
 	"preview_expiry_minutes": 5,
 	"debug_log_tool_calls": 0,
 	"chip_locale_scope": "all_enabled",
+	"enable_doc_event_triggers": 0,
+	"engine_tabs_enabled": 1,
+	"insight_enabled": 0,
+	"insight_model": "llama-3.3-70b-versatile",
+	"insight_max_passes": 5,
+	"insight_max_tokens": 900,
+	"insight_max_tokens_final": 600,
+	"insight_temperature": 0.2,
+	"insight_max_report_rows": 30,
+	"insight_max_list_rows": 25,
+	"insight_max_tool_json_chars": 6000,
+	"insight_max_tools_per_turn": 3,
+	"insight_max_tables_per_card": 4,
+	"insight_enable_readonly_sql": 0,
+	"insight_followup_context": "compact",
+	"insight_show_evidence": 1,
+	"insight_enable_save_snapshot": 1,
+	"insight_enable_logging": 1,
+	"insight_kpi_cache_ttl": 600,
 }
 
 VALID_CHIP_LOCALE_SCOPES = frozenset({"all_enabled", "active_locale", "active_plus_en"})
@@ -74,23 +98,80 @@ def _setting(name):
 	return val
 
 
-def _roles_from_table(table_field):
+def _setting_int(name, *, minimum=1, maximum=None):
+	default = DEFAULTS.get(name)
+	val = _setting(name)
+	try:
+		n = int(val)
+	except (TypeError, ValueError):
+		try:
+			n = int(default)
+		except (TypeError, ValueError):
+			n = minimum
+	if n <= 0:
+		try:
+			d = int(default)
+			n = d if d > 0 else minimum
+		except (TypeError, ValueError):
+			n = minimum
+	if minimum is not None and n < minimum:
+		n = minimum
+	if maximum is not None and n > maximum:
+		n = maximum
+	return n
+
+
+def _setting_float(name, *, minimum=None, maximum=None):
+	default = DEFAULTS.get(name)
+	val = _setting(name)
+	try:
+		n = float(val)
+	except (TypeError, ValueError):
+		try:
+			n = float(default)
+		except (TypeError, ValueError):
+			n = 0.0
+	if n == 0.0 and default not in (None, "", 0, 0.0):
+		try:
+			d = float(default)
+			if d != 0.0:
+				n = d
+		except (TypeError, ValueError):
+			pass
+	if minimum is not None and n < minimum:
+		n = minimum
+	if maximum is not None and n > maximum:
+		n = maximum
+	return n
+
+
+def _allowed_role_rows():
 	settings = get_pilot_settings()
-	rows = settings.get(table_field) or []
-	return [r.role for r in rows if r.role]
+	return [r for r in (settings.get("allowed_roles") or []) if r.role]
 
 
-def user_has_pilot_access(user=None):
+def _matching_allowed_rows(user=None):
+	user = user or frappe.session.user
+	rows = _allowed_role_rows()
+	if not rows:
+		return None
+	user_roles = set(frappe.get_roles(user))
+	return [r for r in rows if r.role in user_roles]
+
+
+def user_has_advisor_access(user=None):
 	user = user or frappe.session.user
 	if user == "Guest":
 		return False
 	if not cint(_setting("enable_pilot")):
 		return False
+	if not (cint(_setting("analyze_enabled")) or cint(_setting("guide_enabled"))):
+		return False
 
-	allowed = _roles_from_table("allowed_roles")
-	if not allowed:
+	matching = _matching_allowed_rows(user)
+	if matching is None:
 		return True
-	return bool(set(allowed) & set(frappe.get_roles(user)))
+	return any(cint(r.advisor_tab) for r in matching)
 
 
 def user_has_build_access(user=None):
@@ -100,10 +181,66 @@ def user_has_build_access(user=None):
 	if not cint(_setting("build_enabled")):
 		return False
 
-	allowed = _roles_from_table("build_allowed_roles")
-	if not allowed:
+	matching = _matching_allowed_rows(user)
+	if matching is None:
 		return "System Manager" in frappe.get_roles(user)
-	return bool(set(allowed) & set(frappe.get_roles(user)))
+	return any(cint(r.build_tab) for r in matching)
+
+
+def user_has_insight_access(user=None):
+	user = user or frappe.session.user
+	if user == "Guest":
+		return False
+	if not cint(_setting("enable_pilot")):
+		return False
+	if not cint(_setting("insight_enabled")):
+		return False
+
+	matching = _matching_allowed_rows(user)
+	if matching is None:
+		return "System Manager" in frappe.get_roles(user)
+	return any(cint(getattr(r, "insight_tab", 0)) for r in matching)
+
+
+def user_has_pilot_access(user=None):
+	return (
+		user_has_advisor_access(user)
+		or user_has_build_access(user)
+		or user_has_insight_access(user)
+		or user_has_engine_tab_access(user)
+	)
+
+
+def user_has_engine_tab_access(user=None, tab=None):
+	"""Any engine tab (agents, flows, knowledge, integrations, logs)."""
+	user = user or frappe.session.user
+	if user == "Guest":
+		return False
+	if not cint(_setting("engine_tabs_enabled")):
+		return False
+	if not frappe.db.exists("DocType", "Agent"):
+		return False
+
+	matching = _matching_allowed_rows(user)
+	if matching is None:
+		return "System Manager" in frappe.get_roles(user)
+
+	tab_field = {
+		"agents": "agents_tab",
+		"flows": "flows_tab",
+		"knowledge": "knowledge_tab",
+		"integrations": "integrations_tab",
+		"logs": "logs_tab",
+	}.get(tab)
+
+	if tab_field:
+		return any(cint(getattr(r, tab_field, 0)) for r in matching)
+
+	return any(
+		cint(getattr(r, f, 0))
+		for r in matching
+		for f in ("agents_tab", "flows_tab", "knowledge_tab", "integrations_tab", "logs_tab")
+	)
 
 
 def get_disabled_analyze_tools():
@@ -137,6 +274,11 @@ def get_advisor_config():
 		"debug_log_tool_calls": cint(_setting("debug_log_tool_calls")),
 		"auto_navigate": cint(_setting("auto_navigate")),
 		"close_sidebar_on_navigate": cint(_setting("close_sidebar_on_navigate")),
+		"brief_replies": cint(_setting("advisor_brief_replies")) if _setting("advisor_brief_replies") is not None else 1,
+		"show_context_bar": cint(_setting("advisor_show_context_bar")) if _setting("advisor_show_context_bar") is not None else 1,
+		"group_chips": cint(_setting("advisor_group_chips")) if _setting("advisor_group_chips") is not None else 1,
+		"followup_chips": cint(_setting("advisor_followup_chips")) if _setting("advisor_followup_chips") is not None else 1,
+		"persist_chat_on_route": cint(_setting("advisor_persist_chat_on_route")),
 	}
 
 
@@ -183,6 +325,56 @@ def get_build_config():
 		"temperature": float(_setting("build_temperature")),
 		"temperature_fallback": float(_setting("build_temperature_fallback")),
 		"preview_expiry_minutes": int(_setting("preview_expiry_minutes")),
+	}
+
+
+def get_disabled_insight_tools():
+	raw = _setting("disabled_insight_tools") or ""
+	if not raw:
+		return frozenset()
+	return frozenset(t.strip() for t in str(raw).split(",") if t.strip())
+
+
+def get_insight_disallowed_doctypes() -> frozenset[str]:
+	settings = get_pilot_settings()
+	return frozenset(
+		row.doctype
+		for row in (settings.get("insight_disallowed_doctypes") or [])
+		if getattr(row, "doctype", None)
+	)
+
+
+def get_insight_disallowed_modules() -> frozenset[str]:
+	settings = get_pilot_settings()
+	return frozenset(
+		row.module
+		for row in (settings.get("insight_disallowed_modules") or [])
+		if getattr(row, "module", None)
+	)
+
+
+def get_insight_config():
+	return {
+		"enabled": cint(_setting("insight_enabled")),
+		"model": _setting("insight_model"),
+		"max_passes": _setting_int("insight_max_passes", minimum=1, maximum=10),
+		"max_tokens": _setting_int("insight_max_tokens", minimum=100, maximum=8000),
+		"max_tokens_final": _setting_int("insight_max_tokens_final", minimum=100, maximum=8000),
+		"temperature": _setting_float("insight_temperature", minimum=0.0, maximum=1.0),
+		"max_report_rows": _setting_int("insight_max_report_rows", minimum=1, maximum=100),
+		"max_list_rows": _setting_int("insight_max_list_rows", minimum=1, maximum=100),
+		"max_tool_json_chars": _setting_int("insight_max_tool_json_chars", minimum=1000, maximum=20000),
+		"max_tools_per_turn": _setting_int("insight_max_tools_per_turn", minimum=1, maximum=5),
+		"max_tables_per_card": _setting_int("insight_max_tables_per_card", minimum=1, maximum=10),
+		"enable_readonly_sql": cint(_setting("insight_enable_readonly_sql")),
+		"followup_context": (_setting("insight_followup_context") or "compact").strip(),
+		"disallowed_modules": get_insight_disallowed_modules(),
+		"disallowed_doctypes": get_insight_disallowed_doctypes(),
+		"disabled_tools": get_disabled_insight_tools(),
+		"show_evidence": cint(_setting("insight_show_evidence")),
+		"enable_save_snapshot": cint(_setting("insight_enable_save_snapshot")),
+		"enable_logging": cint(_setting("insight_enable_logging")),
+		"kpi_cache_ttl": _setting_int("insight_kpi_cache_ttl", minimum=60, maximum=86400),
 	}
 
 

@@ -1,0 +1,29 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<linearGradient id="pilotFavBg" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+<stop stop-color="#002e19"/>
+<stop offset="0.5" stop-color="#005931"/>
+<stop offset="1" stop-color="#0a7a48"/>
+</linearGradient>
+<linearGradient id="pilotFavHighlight" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+<stop stop-color="white" stop-opacity="0.12"/>
+<stop offset="0.5" stop-color="white" stop-opacity="0.03"/>
+<stop offset="1" stop-color="white" stop-opacity="0"/>
+</linearGradient>
+</defs>
+<rect width="32" height="32" rx="7" fill="url(#pilotFavBg)"/>
+<rect width="32" height="32" rx="7" fill="url(#pilotFavHighlight)"/>
+<g transform="translate(3 4)" stroke-linecap="round" stroke-linejoin="round">
+<line x1="10" y1="2" x2="10" y2="20" stroke="#fff" stroke-width="1.55"/>
+<circle cx="10" cy="2" r="1.15" fill="#fff"/>
+<circle cx="10" cy="20" r="1.15" fill="#fff"/>
+<rect x="6.4" y="8.4" width="7.2" height="7.2" rx="1.45" fill="rgba(255,255,255,0.14)" stroke="#fff" stroke-width="1.4"/>
+<text x="10" y="13.3" text-anchor="middle" fill="#fff" font-family="system-ui,-apple-system,sans-serif" font-size="3.9" font-weight="700">AI</text>
+<path d="M13.6 10.2L15.4 7.2" stroke="#fff" stroke-width="1.35"/>
+<circle cx="16.2" cy="6.2" r="1.05" fill="#fff"/>
+<path d="M13.6 12H17.2" stroke="#fff" stroke-width="1.35"/>
+<circle cx="18.4" cy="12" r="1.05" fill="#fff"/>
+<path d="M13.6 13.8L15.4 16.8" stroke="#c8e6d4" stroke-width="1.35"/>
+<circle cx="16.2" cy="17.8" r="1.05" fill="#c8e6d4"/>
+</g>
+</svg>

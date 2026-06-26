@@ -2,10 +2,11 @@
 // ai_sidebar.js — Frappe Pilot (v2 split-chips)
 // ============================================================
 
-var FRAI_BUILD = "2026-06-07-trigger-hover";
+var FRAI_BUILD = "2026-06-17-advisor-gaps";
 
 var PLACEHOLDER_FALLBACKS = {
     placeholder_advisor:        "Ask about this page or where to go…",
+    placeholder_insight:        "Ask about business performance, reports, or KPIs…",
     placeholder_build:          "Describe a field, DocType, or automation…",
     placeholder_advisor_form:   "Summarize or ask about {label}…",
     placeholder_advisor_form_new: "What should I enter on this {doctype}?…",
@@ -21,6 +22,7 @@ var PANEL_WIDTH_MIN  = 280;
 var PANEL_WIDTH_MAX  = 640;
 var PANEL_HEIGHT_MIN = 240;
 var PANEL_HEIGHT_MAX_VH = 0.75;
+var PUSH_LAYOUT_BREAKPOINT = 1024;
 
 var FRAI = {
     isOpen:              false,
@@ -48,6 +50,9 @@ var FRAI = {
     suggestionsCache:    {},
     chipMeta:            {},
     pendingSuggestions:  {},
+    pendingPresetId:     "",
+    insightContext:      {},
+    lastMicroReport:     null,
 };
 
 var ANALYZE_DIAGNOSE_CHIPS = {
@@ -169,7 +174,9 @@ function _bootstrapPilot() {
         callback: function (r) {
             if (!r || !r.message) return;
             FRAI.config = r.message;
+            if (window.FRAI_ENGINE && FRAI_ENGINE.init) FRAI_ENGINE.init(FRAI.config);
             if (!FRAI.config.enabled) return;
+            if (!FRAI.config.can_access_pilot) return;
 
             FRAI.sidebarLocale = _loadSidebarLocale();
             _normalizeSidebarLocale();
@@ -180,8 +187,10 @@ function _bootstrapPilot() {
 
             _injectCSS();
             _buildDOM();
+            if (window.FRAI_ENGINE && FRAI_ENGINE.init) FRAI_ENGINE.init(FRAI.config);
             _bindEvents();
             _bindResizeEvents();
+            _ensureDeskLayoutObservers();
             _applySidebarPosition(FRAI.sidebarPosition);
             _renderLocaleToggle();
             _applyTabVisibility();
@@ -213,10 +222,20 @@ function _injectCSS() {
     style.id = "frai-styles";
     style.textContent = `
 
+/* ── Pilot brand tokens (green, independent of desk theme) ── */
+#frai-trigger,
+#frai-panel {
+    --frai-accent: #005931;
+    --frai-accent-light: #0a7a48;
+    --frai-accent-dark: #003d21;
+    --frai-accent-bg: #e8f5ef;
+    --frai-accent-bg-light: #f0faf5;
+}
+
 /* ── Trigger (edge rail) ── */
 #frai-trigger {
     --frai-trigger-edge: 0px;
-    --frai-trigger-accent: var(--primary, #2490ef);
+    --frai-trigger-accent: var(--frai-accent, #005931);
     position: fixed;
     z-index: 1050;
     display: flex;
@@ -267,7 +286,7 @@ function _injectCSS() {
     gap: 8px;
     overflow: hidden;
     background:
-        linear-gradient(135deg, rgba(36,144,239,.08) 0%, rgba(36,144,239,.02) 55%, transparent 100%),
+        linear-gradient(135deg, rgba(0,89,49,.08) 0%, rgba(0,89,49,.02) 55%, transparent 100%),
         color-mix(in srgb, var(--fg-color, #fff) 92%, var(--frai-trigger-accent) 8%);
     border: 1px solid color-mix(in srgb, var(--border-color, #d1d8dd) 80%, var(--frai-trigger-accent) 20%);
     box-shadow:
@@ -290,7 +309,7 @@ function _injectCSS() {
         180deg,
         transparent 0%,
         var(--frai-trigger-accent) 42%,
-        color-mix(in srgb, var(--frai-trigger-accent) 55%, #7dd3fc) 58%,
+        color-mix(in srgb, var(--frai-trigger-accent) 55%, #c4b5fd) 58%,
         transparent 100%
     );
     opacity: .85;
@@ -341,14 +360,14 @@ function _injectCSS() {
         90deg,
         transparent 0%,
         var(--frai-trigger-accent) 42%,
-        color-mix(in srgb, var(--frai-trigger-accent) 55%, #7dd3fc) 58%,
+        color-mix(in srgb, var(--frai-trigger-accent) 55%, #c4b5fd) 58%,
         transparent 100%
     );
 }
 #frai-trigger:hover .frai-trigger-rail,
 #frai-trigger:focus-visible .frai-trigger-rail {
     box-shadow:
-        0 12px 28px rgba(36, 144, 239, .16),
+        0 12px 28px rgba(0, 89, 49, .16),
         0 1px 0 rgba(255,255,255,.6) inset;
     border-color: color-mix(in srgb, var(--frai-trigger-accent) 35%, var(--border-color, #d1d8dd));
     gap: 10px;
@@ -392,19 +411,18 @@ function _injectCSS() {
     width: 28px;
     height: 28px;
     border-radius: 9px;
-    background: color-mix(in srgb, var(--frai-trigger-accent) 14%, var(--fg-color, #fff));
+    overflow: hidden;
+    background: transparent;
     box-shadow: 0 0 0 1px color-mix(in srgb, var(--frai-trigger-accent) 22%, transparent);
     flex-shrink: 0;
     transition: transform .25s cubic-bezier(.34,1.56,.64,1), box-shadow .2s ease;
 }
-.frai-trigger-icon svg {
-    width: 15px;
-    height: 15px;
-    stroke: var(--frai-trigger-accent);
-    fill: none;
-    stroke-width: 2;
-    stroke-linecap: round;
-    stroke-linejoin: round;
+.frai-trigger-icon .frai-mark-img,
+#frai-icon-wrap .frai-mark-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
 }
 #frai-trigger:hover .frai-trigger-icon {
     transform: scale(1.06) rotate(-4deg);
@@ -459,19 +477,33 @@ function _injectCSS() {
 #frai-trigger.frai-pos-bottom:not(.frai-trigger-open):focus-visible #frai-trigger-label {
     transform: scale(1.06);
 }
+#frai-trigger.frai-trigger-open {
+    z-index: 1052;
+}
 #frai-trigger.frai-trigger-open .frai-trigger-copy {
-    display: none;
+    display: flex;
+}
+#frai-trigger.frai-trigger-open #frai-trigger-label {
+    font-size: 9px;
+    letter-spacing: .12em;
+    color: var(--frai-trigger-accent);
 }
 #frai-trigger.frai-trigger-open .frai-trigger-rail {
-    padding: 10px 8px;
+    padding: 12px 9px;
     background: var(--fg-color, #fff);
+    border-color: color-mix(in srgb, var(--frai-trigger-accent) 45%, var(--border-color, #d1d8dd));
 }
-#frai-trigger.frai-trigger-open.frai-pos-right .frai-trigger-rail,
+#frai-trigger.frai-trigger-open.frai-pos-right .frai-trigger-rail {
+    padding: 14px 8px 12px 10px;
+    box-shadow: -6px 0 18px rgba(15, 23, 42, .14);
+}
 #frai-trigger.frai-trigger-open.frai-pos-left .frai-trigger-rail {
-    padding: 12px 7px;
+    padding: 14px 10px 12px 8px;
+    box-shadow: 6px 0 18px rgba(15, 23, 42, .14);
 }
 #frai-trigger.frai-trigger-open.frai-pos-bottom .frai-trigger-rail {
-    padding: 7px 12px;
+    padding: 9px 14px 10px;
+    box-shadow: 0 -6px 18px rgba(15, 23, 42, .14);
 }
 #frai-trigger.frai-trigger-open .frai-trigger-beam {
     opacity: 1;
@@ -529,7 +561,7 @@ function _injectCSS() {
 }
 #frai-resize-handle:hover,
 #frai-resize-handle.frai-dragging {
-    background: var(--primary, #2490ef);
+    background: var(--frai-accent, #005931);
     opacity: .25;
 }
 
@@ -578,6 +610,209 @@ function _injectCSS() {
 }
 #frai-panel.frai-pos-bottom.frai-open { transform: translateY(0); }
 
+/* ── Desk push layout (desktop) ── */
+#frai-panel.frai-layout-push.frai-pos-right,
+#frai-panel.frai-layout-push.frai-pos-left {
+    top: 0;
+    height: 100dvh;
+    max-width: min(640px, 38vw);
+}
+#frai-panel.frai-layout-push.frai-pos-bottom {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    height: var(--frai-panel-height, 360px);
+    max-height: 75dvh;
+}
+/* DevTools-style: shrink the whole desk viewport, panel sits in the freed gutter */
+body.frai-panel-open.frai-layout-push.frai-pos-right {
+    width: calc(100vw - var(--frai-panel-width, 360px));
+    max-width: calc(100vw - var(--frai-panel-width, 360px));
+    min-width: 0;
+    overflow-x: hidden;
+    box-sizing: border-box;
+    transition: width .22s cubic-bezier(.4,0,.2,1), max-width .22s cubic-bezier(.4,0,.2,1),
+        margin .22s cubic-bezier(.4,0,.2,1);
+}
+body.frai-panel-open.frai-layout-push.frai-pos-left {
+    width: calc(100vw - var(--frai-panel-width, 360px));
+    max-width: calc(100vw - var(--frai-panel-width, 360px));
+    min-width: 0;
+    margin-inline-start: var(--frai-panel-width, 360px);
+    overflow-x: hidden;
+    box-sizing: border-box;
+    transition: width .22s cubic-bezier(.4,0,.2,1), max-width .22s cubic-bezier(.4,0,.2,1),
+        margin .22s cubic-bezier(.4,0,.2,1);
+}
+body.frai-panel-open.frai-layout-push.frai-pos-bottom {
+    width: 100vw;
+    max-width: 100vw;
+    min-width: 0;
+    overflow-x: hidden;
+    box-sizing: border-box;
+}
+body.frai-panel-open.frai-layout-push .main-section {
+    box-sizing: border-box;
+    width: auto;
+    max-width: 100%;
+    min-width: 0;
+    flex: 1 1 0;
+    overflow-x: hidden;
+    transition: width .22s cubic-bezier(.4,0,.2,1), max-width .22s cubic-bezier(.4,0,.2,1),
+        margin .22s cubic-bezier(.4,0,.2,1), height .22s cubic-bezier(.4,0,.2,1);
+}
+body.frai-panel-open.frai-layout-push.frai-pos-bottom .main-section {
+    height: calc(100dvh - var(--frai-panel-height, 360px));
+    max-height: calc(100dvh - var(--frai-panel-height, 360px));
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+body.frai-panel-open.frai-layout-push .page-container,
+body.frai-panel-open.frai-layout-push .layout-main,
+body.frai-panel-open.frai-layout-push .layout-main-section-wrapper,
+body.frai-panel-open.frai-layout-push .layout-main-section,
+body.frai-panel-open.frai-layout-push .page-content,
+body.frai-panel-open.frai-layout-push .page-wrapper,
+body.frai-panel-open.frai-layout-push .page-body {
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+body.frai-panel-open.frai-layout-push[data-route^="Form"] .layout-main-section-wrapper {
+    flex: 1 1 0;
+    min-width: 0;
+    width: auto;
+    max-width: 100%;
+}
+body.frai-panel-open.frai-layout-push[data-route^="Form"] .layout-main {
+    min-width: 0;
+    max-width: 100%;
+}
+body.frai-panel-open.frai-layout-push .page-head .page-head-content {
+    flex-wrap: wrap !important;
+    height: auto !important;
+    min-height: var(--page-head-height, 48px);
+    row-gap: 8px;
+    align-items: flex-start;
+}
+body.frai-panel-open.frai-layout-push .page-head .container {
+    max-width: 100%;
+    width: 100%;
+}
+body.frai-panel-open.frai-layout-push .page-head .page-title {
+    flex: 1 1 200px;
+    min-width: 0;
+    max-width: 100%;
+}
+body.frai-panel-open.frai-layout-push .page-head .standard-items-section {
+    flex: 1 1 100%;
+    min-width: 0;
+    max-width: 100%;
+    justify-content: flex-end;
+}
+body.frai-panel-open.frai-layout-push .page-actions {
+    flex-direction: row !important;
+    flex-wrap: wrap;
+    flex: 1 1 auto;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    max-width: 100%;
+    width: 100%;
+    overflow-x: auto;
+}
+body.frai-panel-open.frai-layout-push .page-actions .custom-actions,
+body.frai-panel-open.frai-layout-push .page-actions .standard-actions {
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+body.frai-panel-open.frai-layout-push .page-actions .custom-btn-group,
+body.frai-panel-open.frai-layout-push .page-actions .actions-btn-group,
+body.frai-panel-open.frai-layout-push .page-actions .menu-btn-group {
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+body.frai-panel-open.frai-layout-push .page-actions .btn {
+    margin-left: 0 !important;
+    margin-inline-end: 0;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+body.frai-panel-open.frai-layout-push .page-actions .btn-group {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+body.frai-panel-open.frai-layout-push .page-form {
+    flex-wrap: wrap;
+    gap: 6px;
+}
+body.frai-panel-open.frai-layout-push .page-actions .filters {
+    flex-wrap: wrap;
+    gap: 6px;
+    min-width: 0;
+}
+body.frai-panel-open.frai-layout-push.frai-pos-bottom [data-page-route="Workspaces"] .layout-main {
+    height: auto;
+    max-height: 100%;
+}
+body.frai-panel-open.frai-layout-push.frai-pos-bottom .layout-main-section-wrapper:not(.disable-scrolling) {
+    max-height: 100%;
+}
+body.frai-panel-open.frai-layout-push.frai-pos-bottom #page-query-report .layout-main-section {
+    height: auto;
+}
+body.frai-panel-open.frai-layout-push.frai-pos-bottom[data-route^="Form"] .layout-side-section {
+    height: auto;
+    max-height: calc(100dvh - var(--frai-panel-height, 360px));
+}
+body.frai-panel-open.frai-layout-push .layout-side-section {
+    flex-shrink: 0;
+    max-width: min(var(--form-sidebar-width, 277px), 40%);
+}
+body.frai-is-resizing.frai-layout-push,
+body.frai-is-resizing.frai-layout-push .main-section {
+    transition: none !important;
+}
+
+/* ── Drawer layout (mobile/tablet) ── */
+#frai-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1048;
+    background: rgba(15, 23, 42, .35);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .22s ease;
+}
+#frai-backdrop.frai-visible {
+    opacity: 1;
+    pointer-events: auto;
+}
+body.frai-layout-drawer #frai-panel.frai-pos-right,
+body.frai-layout-drawer #frai-panel.frai-pos-left {
+    top: 0 !important;
+    height: 100dvh !important;
+    width: min(92vw, 400px) !important;
+    max-width: min(92vw, 400px);
+}
+body.frai-layout-drawer #frai-panel.frai-pos-bottom {
+    top: auto !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    height: min(75dvh, 420px) !important;
+    max-height: min(75dvh, 420px);
+}
+
 /* ── Header (light, Frappe-native) ── */
 #frai-header {
     flex-shrink: 0;
@@ -589,12 +824,16 @@ function _injectCSS() {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    flex-wrap: wrap;
+    row-gap: 6px;
     gap: 8px;
     padding: 0 14px 6px;
 }
 #frai-header-row {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
+    row-gap: 6px;
     gap: 8px;
     margin-bottom: 10px;
 }
@@ -607,6 +846,7 @@ function _injectCSS() {
 #frai-position-toggle {
     display: flex;
     align-items: center;
+    flex-shrink: 0;
     gap: 2px;
     background: var(--control-bg, #f4f5f6);
     border: 1px solid var(--border-color, #d1d8dd);
@@ -630,7 +870,7 @@ function _injectCSS() {
 .frai-position-btn:hover { color: var(--text-color, #36414c); }
 .frai-position-btn.frai-position-active {
     background: var(--fg-color, #fff);
-    color: var(--primary, #2490ef);
+    color: var(--frai-accent, #005931);
     box-shadow: 0 1px 3px rgba(0,0,0,.08);
 }
 .frai-position-btn svg {
@@ -658,23 +898,24 @@ function _injectCSS() {
     opacity: 1;
     pointer-events: auto;
 }
-.frai-position-reset:hover { color: var(--primary, #2490ef); }
+.frai-position-reset:hover { color: var(--frai-accent); }
 #frai-icon-wrap {
     width: 28px; height: 28px;
     border-radius: 6px;
-    background: var(--primary-light, #e4f2ff);
+    overflow: hidden;
+    background: transparent;
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--frai-accent, #005931) 18%, transparent);
 }
-#frai-icon-wrap svg {
-    width: 15px; height: 15px;
-    stroke: var(--primary, #2490ef);
-    fill: none;
-    stroke-width: 2;
-    stroke-linecap: round;
-    stroke-linejoin: round;
+#frai-icon-wrap .frai-mark-img,
+.frai-trigger-icon .frai-mark-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
 }
 #frai-title-wrap { flex: 1; min-width: 0; }
 #frai-title {
@@ -733,10 +974,286 @@ function _injectCSS() {
 }
 .frai-tab:hover { color: var(--text-color, #36414c); }
 .frai-tab.frai-tab-active {
-    color: var(--primary, #2490ef);
-    border-bottom-color: var(--primary, #2490ef);
+    color: var(--frai-accent);
+    border-bottom-color: var(--frai-accent);
     font-weight: 600;
 }
+
+/* ── Insight micro-report ── */
+.frai-insight-context-bar {
+    font-size: 10px;
+    color: var(--text-muted, #8d99a6);
+    padding: 6px 12px 0;
+    border-bottom: 1px solid var(--border-color, #d1d8dd);
+}
+.frai-insight-new-chat {
+    flex: 0 0 auto;
+    border: none;
+    background: transparent;
+    color: var(--text-muted, #8d99a6);
+    font-size: 16px;
+    cursor: pointer;
+    padding: 0 6px;
+    line-height: 1;
+}
+.frai-insight-new-chat:hover { color: var(--frai-accent, #005931); }
+
+.frai-advisor-context-bar {
+    flex-shrink: 0;
+    padding: 6px 12px;
+    font-size: 11px;
+    color: var(--text-muted, #6c7680);
+    background: var(--subtle-fg, #f4f5f6);
+    border-bottom: 1px solid var(--border-color, #d1d8dd);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.frai-advisor-headline {
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.frai-advisor-card {
+    margin-top: 10px;
+    border: 1px solid var(--border-color, #d1d8dd);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--card-bg, #fff);
+}
+
+.frai-advisor-card-header {
+    padding: 8px 10px;
+    font-size: 12px;
+    font-weight: 600;
+    background: var(--subtle-fg, #f4f5f6);
+    border-bottom: 1px solid var(--border-color, #d1d8dd);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.frai-advisor-card table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+}
+
+.frai-advisor-card th,
+.frai-advisor-card td {
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--border-color, #eee);
+    text-align: left;
+}
+
+.frai-advisor-card-footer {
+    padding: 6px 10px;
+    font-size: 10px;
+    color: var(--text-muted, #6c7680);
+    border-top: 1px solid var(--border-color, #eee);
+}
+
+.frai-advisor-card-section {
+    padding: 8px 10px;
+    border-top: 1px solid var(--border-color, #eee);
+    font-size: 11px;
+}
+
+.frai-advisor-card-section-title {
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.frai-advisor-card-section ul {
+    margin: 0;
+    padding-left: 16px;
+}
+
+.frai-chip-group-label {
+    font-size: 10px;
+    color: var(--text-muted, #6c7680);
+    margin: 8px 0 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.frai-micro-report {
+    margin-top: 8px;
+    padding: 10px;
+    border-radius: 8px;
+    background: var(--control-bg, #f4f5f6);
+    border: 1px solid var(--border-color, #d1d8dd);
+}
+.frai-micro-report-error { border-color: #e74c3c; }
+.frai-micro-report-warnings {
+    margin-bottom: 8px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    background: rgba(255, 193, 7, 0.12);
+    border: 1px solid rgba(255, 193, 7, 0.45);
+    font-size: 11px;
+    color: var(--text-color, #36414c);
+}
+.frai-micro-report-warnings-title {
+    font-weight: 600;
+    margin-bottom: 4px;
+    color: #b8860b;
+}
+.frai-micro-report-warnings ul {
+    margin: 0;
+    padding-left: 16px;
+}
+.frai-micro-report-warnings li { margin: 2px 0; }
+.frai-micro-report-multi {
+    max-height: 420px;
+    overflow-y: auto;
+}
+.frai-micro-report-section-divider {
+    border: 0;
+    border-top: 1px solid var(--border-color, #d1d8dd);
+    margin: 10px 0;
+}
+.frai-micro-report-sections-badge {
+    display: inline-block;
+    margin-left: 6px;
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--text-muted, #8d99a6);
+}
+.frai-micro-report-header { margin-bottom: 8px; }
+.frai-micro-report-period { font-size: 10px; color: var(--text-muted, #8d99a6); margin-top: 2px; }
+.frai-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin-bottom: 8px;
+}
+.frai-kpi-item {
+    padding: 6px 8px;
+    background: var(--card-bg, #fff);
+    border-radius: 6px;
+    border: 1px solid var(--border-color, #d1d8dd);
+}
+.frai-kpi-label { font-size: 10px; color: var(--text-muted, #8d99a6); }
+.frai-kpi-value { font-size: 13px; font-weight: 600; direction: ltr; unicode-bidi: embed; }
+.frai-kpi-delta {
+    font-size: 10px;
+    margin-left: 4px;
+    color: var(--text-muted, #8d99a6);
+    font-weight: 500;
+}
+.frai-micro-report-sources { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 8px; }
+.frai-micro-report-link {
+    font-size: 11px;
+    color: var(--frai-accent, #005931);
+    text-decoration: none;
+}
+.frai-micro-report-link:hover { text-decoration: underline; }
+.frai-micro-report-save {
+    margin-top: 8px;
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 4px;
+    border: 1px solid var(--border-color, #d1d8dd);
+    background: var(--card-bg, #fff);
+    cursor: pointer;
+}
+.frai-micro-report-save:hover { border-color: var(--frai-accent, #005931); color: var(--frai-accent, #005931); }
+.frai-micro-report-error-msg { color: #e74c3c; font-size: 12px; }
+.frai-micro-report-table-wrap {
+    margin-top: 8px;
+    border: 1px solid var(--border-color, #d1d8dd);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--card-bg, #fff);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+.frai-micro-report-table-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 10px;
+    background: var(--control-bg, #f4f5f6);
+    border-bottom: 1px solid var(--border-color, #d1d8dd);
+}
+.frai-micro-report-table-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-color, #36414c);
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.frai-micro-report-row-badge {
+    font-size: 10px;
+    font-weight: 500;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: var(--card-bg, #fff);
+    border: 1px solid var(--border-color, #d1d8dd);
+    color: var(--text-muted, #8d99a6);
+    white-space: nowrap;
+}
+.frai-micro-report-copy-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid var(--border-color, #d1d8dd);
+    border-radius: 6px;
+    background: var(--card-bg, #fff);
+    color: var(--text-muted, #8d99a6);
+    cursor: pointer;
+    flex-shrink: 0;
+}
+.frai-micro-report-copy-btn:hover {
+    border-color: var(--frai-accent, #005931);
+    color: var(--frai-accent, #005931);
+}
+.frai-micro-report-table-scroll { overflow-x: auto; }
+.frai-micro-report-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+.frai-micro-report-table th,
+.frai-micro-report-table td {
+    padding: 7px 10px;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color, #d1d8dd);
+}
+.frai-micro-report-table th {
+    background: var(--control-bg, #f7f7f7);
+    font-weight: 600;
+    font-size: 11px;
+    color: var(--text-muted, #8d99a6);
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+.frai-micro-report-table tbody tr:nth-child(even) { background: rgba(0, 0, 0, 0.02); }
+.frai-micro-report-table tbody tr:hover { background: rgba(0, 89, 49, 0.06); }
+.frai-micro-report-table td.frai-cell-num,
+.frai-micro-report-table th.frai-cell-num { text-align: right; }
+.frai-doc-link {
+    background: none;
+    border: none;
+    padding: 0;
+    margin: 0;
+    font: inherit;
+    color: var(--frai-accent, #005931);
+    cursor: pointer;
+    text-align: inherit;
+    text-decoration: none;
+}
+.frai-doc-link:hover { text-decoration: underline; }
 
 /* ── Build sub-tabs ── */
 #frai-subtabs {
@@ -762,8 +1279,8 @@ function _injectCSS() {
 }
 .frai-subtab:hover { color: var(--text-color, #36414c); }
 .frai-subtab.frai-subtab-active {
-    color: var(--primary, #2490ef);
-    border-bottom-color: var(--primary, #2490ef);
+    color: var(--frai-accent, #005931);
+    border-bottom-color: var(--frai-accent, #005931);
     font-weight: 600;
 }
 
@@ -821,7 +1338,7 @@ function _injectCSS() {
 }
 .frai-bubble.frai-user {
     align-self: flex-end;
-    background: var(--primary, #2490ef);
+    background: var(--frai-accent, #005931);
     color: #fff;
     border-radius: 10px 4px 10px 10px;
     border: none;
@@ -861,9 +1378,9 @@ function _injectCSS() {
     text-align: left;
 }
 .frai-chip:hover {
-    border-color: var(--primary, #2490ef);
-    color: var(--primary, #2490ef);
-    background: var(--primary-light, #e4f2ff);
+    border-color: var(--frai-accent, #005931);
+    color: var(--frai-accent, #005931);
+    background: var(--frai-accent-bg, #e8f5ef);
 }
 .frai-chips-row {
     display: flex;
@@ -881,6 +1398,7 @@ function _injectCSS() {
 .frai-chip-rtl .frai-chip-badge, .frai-chip-ckb .frai-chip-badge, .frai-chip-ar .frai-chip-badge { margin-left: 0; margin-right: 4px; }
 #frai-locale-toggle {
     display: none;
+    flex-shrink: 0;
     gap: 4px;
     margin-right: 8px;
 }
@@ -895,8 +1413,8 @@ function _injectCSS() {
     cursor: pointer;
 }
 .frai-locale-btn.frai-locale-active {
-    border-color: var(--primary, #2490ef);
-    color: var(--primary, #2490ef);
+    border-color: var(--frai-accent, #005931);
+    color: var(--frai-accent, #005931);
     font-weight: 600;
 }
 .frai-nav-links {
@@ -909,19 +1427,19 @@ function _injectCSS() {
     font-size: 11px;
     padding: 5px 10px;
     border-radius: 6px;
-    border: 1px solid var(--primary, #2490ef);
-    background: var(--primary-light, #e4f2ff);
-    color: var(--primary, #2490ef);
+    border: 1px solid var(--frai-accent, #005931);
+    background: var(--frai-accent-bg, #e8f5ef);
+    color: var(--frai-accent, #005931);
     cursor: pointer;
 }
-.frai-nav-link:hover { background: var(--primary, #2490ef); color: #fff; }
+.frai-nav-link:hover { background: var(--frai-accent, #005931); color: #fff; }
 .frai-nav-confirm {
     margin-top: 8px;
     font-size: 11.5px;
     padding: 6px 12px;
     border-radius: 6px;
     border: none;
-    background: var(--primary, #2490ef);
+    background: var(--frai-accent, #005931);
     color: #fff;
     cursor: pointer;
     width: 100%;
@@ -946,8 +1464,8 @@ function _injectCSS() {
     text-align: left;
 }
 .frai-cap-card:hover {
-    border-color: var(--primary, #2490ef);
-    box-shadow: 0 2px 8px rgba(36,144,239,0.12);
+    border-color: var(--frai-accent, #005931);
+    box-shadow: 0 2px 8px rgba(0,89,49,0.12);
     transform: translateY(-1px);
 }
 .frai-cap-icon {
@@ -1040,7 +1558,7 @@ function _injectCSS() {
     transition: border-color .15s, background .15s;
 }
 #frai-input:focus {
-    border-color: var(--primary, #2490ef);
+    border-color: var(--frai-accent, #005931);
     background: var(--fg-color, #fff);
 }
 #frai-input::placeholder { color: var(--text-muted, #8d99a6); }
@@ -1048,7 +1566,7 @@ function _injectCSS() {
     width: 34px; height: 34px;
     border-radius: 8px;
     border: none;
-    background: var(--primary, #2490ef);
+    background: var(--frai-accent, #005931);
     color: #fff;
     cursor: pointer;
     display: flex;
@@ -1057,7 +1575,7 @@ function _injectCSS() {
     flex-shrink: 0;
     transition: background .13s, transform .1s;
 }
-#frai-send:hover  { background: var(--primary-dark, #1a73c8); }
+#frai-send:hover  { background: var(--frai-accent-dark, #003d21); }
 #frai-send:active { transform: scale(.93); }
 #frai-send svg {
     width: 15px; height: 15px;
@@ -1202,9 +1720,9 @@ body.frai-is-resizing * {
     font-size: 11px;
     padding: 4px 10px;
     border-radius: 20px;
-    border: 1px dashed var(--primary, #2490ef);
-    color: var(--primary, #2490ef);
-    background: var(--primary-light, #e4f2ff);
+    border: 1px dashed var(--frai-accent, #005931);
+    color: var(--frai-accent, #005931);
+    background: var(--frai-accent-bg, #e8f5ef);
     cursor: pointer;
     margin-top: 2px;
     margin-bottom: 6px;
@@ -1262,6 +1780,43 @@ body.frai-is-resizing * {
     background: var(--border-color, #d1d8dd);
     border-radius: 4px;
 }
+
+.frai-engine-pane { flex-direction: column; }
+.frai-engine-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border-color, #d1d8dd);
+    flex-shrink: 0;
+}
+.frai-engine-title { font-weight: 600; font-size: 12px; }
+.frai-engine-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 12px;
+}
+.frai-engine-items { list-style: none; margin: 0; padding: 0; }
+.frai-engine-item {
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border-color, #d1d8dd);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.frai-engine-meta { font-size: 11px; color: var(--text-muted, #8d99a6); }
+.frai-engine-empty, .frai-engine-loading {
+    color: var(--text-muted, #8d99a6);
+    font-size: 12px;
+    padding: 12px 0;
+}
+.frai-engine-actions { display: flex; gap: 6px; }
+.frai-engine-clickable { cursor: pointer; }
+.frai-engine-clickable:hover { background: var(--control-bg, #f4f5f6); }
+.frai-flow-editor { padding: 8px 12px; border-top: 1px solid var(--border-color, #d1d8dd); }
+.frai-flow-editor textarea { width: 100%; font-family: monospace; font-size: 11px; }
+#frai-tabs { flex-wrap: wrap; }
+.frai-tab-engine { font-size: 11px; }
 .frai-history-empty {
     text-align: center;
     padding: 40px 16px;
@@ -1380,8 +1935,8 @@ body.frai-is-resizing * {
     position: absolute;
     inset: 0;
     background:
-        radial-gradient(ellipse 80% 50% at 50% -10%, rgba(36, 144, 239, 0.09) 0%, transparent 55%),
-        radial-gradient(ellipse 60% 40% at 100% 100%, rgba(36, 144, 239, 0.05) 0%, transparent 50%);
+        radial-gradient(ellipse 80% 50% at 50% -10%, rgba(0, 89, 49, 0.09) 0%, transparent 55%),
+        radial-gradient(ellipse 60% 40% at 100% 100%, rgba(0, 89, 49, 0.05) 0%, transparent 50%);
     pointer-events: none;
 }
 @keyframes frai-setup-in {
@@ -1402,14 +1957,14 @@ body.frai-is-resizing * {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: linear-gradient(145deg, var(--primary, #2490ef) 0%, #5b9cf5 100%);
+    background: linear-gradient(145deg, var(--frai-accent-dark, #003d21) 0%, var(--frai-accent, #005931) 100%);
     color: #fff;
-    box-shadow: 0 8px 28px rgba(36, 144, 239, 0.28);
+    box-shadow: 0 8px 28px rgba(0, 89, 49, 0.28);
     animation: frai-setup-pulse 3s ease-in-out infinite;
 }
 @keyframes frai-setup-pulse {
-    0%, 100% { box-shadow: 0 8px 28px rgba(36, 144, 239, 0.28); }
-    50%      { box-shadow: 0 10px 36px rgba(36, 144, 239, 0.38); }
+    0%, 100% { box-shadow: 0 8px 28px rgba(0, 89, 49, 0.28); }
+    50%      { box-shadow: 0 10px 36px rgba(0, 89, 49, 0.38); }
 }
 .frai-api-setup-icon svg {
     width: 28px;
@@ -1455,8 +2010,8 @@ body.frai-is-resizing * {
     width: 20px;
     height: 20px;
     border-radius: 50%;
-    background: var(--primary-light, #e4f2ff);
-    color: var(--primary, #2490ef);
+    background: var(--frai-accent-bg, #e8f5ef);
+    color: var(--frai-accent, #005931);
     font-size: 10px;
     font-weight: 700;
     display: flex;
@@ -1472,17 +2027,17 @@ body.frai-is-resizing * {
     padding: 11px 16px;
     border: none;
     border-radius: 9px;
-    background: var(--primary, #2490ef);
+    background: var(--frai-accent, #005931);
     color: #fff;
     font-size: 13px;
     font-weight: 600;
     cursor: pointer;
     transition: transform 0.15s ease, box-shadow 0.15s ease;
-    box-shadow: 0 3px 12px rgba(36, 144, 239, 0.35);
+    box-shadow: 0 3px 12px rgba(0, 89, 49, 0.35);
 }
 .frai-api-setup-cta:hover {
     transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(36, 144, 239, 0.42);
+    box-shadow: 0 6px 20px rgba(0, 89, 49, 0.42);
 }
 .frai-api-setup-secondary {
     font-size: 11px;
@@ -1510,9 +2065,49 @@ body.frai-is-resizing * {
     transition: border-color 0.15s, color 0.15s, background 0.15s;
 }
 .frai-api-setup-providers span.frai-provider-active {
-    background: var(--primary-light, #e4f2ff);
-    color: var(--primary, #2490ef);
-    border-color: rgba(36, 144, 239, 0.25);
+    background: var(--frai-accent-bg, #e8f5ef);
+    color: var(--frai-accent, #005931);
+    border-color: rgba(0, 89, 49, 0.25);
+    font-weight: 600;
+}
+.frai-llm-failover {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--border-color, #d1d8dd);
+}
+.frai-llm-failover-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted, #8d99a6);
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.frai-llm-failover-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.frai-llm-failover-chip {
+    font-size: 11px;
+    font-weight: 500;
+    padding: 4px 10px;
+    border-radius: 20px;
+    border: 1px solid var(--border-color, #d1d8dd);
+    background: var(--control-bg, #f4f5f6);
+    color: var(--text-color, #36414c);
+    cursor: pointer;
+    transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+.frai-llm-failover-chip:hover {
+    border-color: var(--frai-accent, #005931);
+    color: var(--frai-accent, #005931);
+    background: var(--frai-accent-bg, #e8f5ef);
+}
+.frai-llm-failover-chip.frai-llm-failover-active {
+    border-color: var(--frai-accent, #005931);
+    background: var(--frai-accent-bg, #e8f5ef);
+    color: var(--frai-accent, #005931);
     font-weight: 600;
 }
 #frai-settings-gear {
@@ -1531,9 +2126,9 @@ body.frai-is-resizing * {
     transition: color .12s, background .12s, box-shadow .12s;
 }
 #frai-settings-gear:hover {
-    color: var(--primary, #2490ef);
-    background: var(--primary-light, #e4f2ff);
-    box-shadow: 0 0 0 3px var(--primary-light, #e4f2ff);
+    color: var(--frai-accent, #005931);
+    background: var(--frai-accent-bg, #e8f5ef);
+    box-shadow: 0 0 0 3px var(--frai-accent-bg, #e8f5ef);
 }
 #frai-settings-gear svg {
     width: 16px;
@@ -1563,10 +2158,7 @@ function _buildDOM() {
         '<span class="frai-trigger-rail">' +
             '<span class="frai-trigger-beam" aria-hidden="true"></span>' +
             '<span class="frai-trigger-icon" aria-hidden="true">' +
-                '<svg viewBox="0 0 24 24">' +
-                    '<path d="M12 2l1.5 6.5L20 10l-6.5 1.5L12 18l-1.5-6.5L4 10l6.5-1.5z"/>' +
-                    '<path d="M19 2l.75 2.25L22 5l-2.25.75L19 8l-.75-2.25L16 5l2.25-.75z"/>' +
-                '</svg>' +
+                '<img class="frai-mark-img" src="/assets/frappe_pilot/images/frappe-pilot-mark.svg" alt="" width="28" height="28" />' +
             '</span>' +
             '<span class="frai-trigger-copy">' +
                 '<span id="frai-trigger-label">Pilot</span>' +
@@ -1589,10 +2181,7 @@ function _buildDOM() {
         '<div id="frai-header">' +
             '<div id="frai-header-row">' +
                 '<div id="frai-icon-wrap">' +
-                    '<svg viewBox="0 0 24 24" aria-hidden="true">' +
-                        '<path d="M12 2l1.5 6.5L20 10l-6.5 1.5L12 18l-1.5-6.5L4 10l6.5-1.5z"/>' +
-                        '<path d="M19 2l.75 2.25L22 5l-2.25.75L19 8l-.75-2.25L16 5l2.25-.75z"/>' +
-                    '</svg>' +
+                '<img class="frai-mark-img" src="/assets/frappe_pilot/images/frappe-pilot-mark.svg" alt="" width="28" height="28" />' +
                 '</div>' +
                 '<div id="frai-title-wrap">' +
                     '<div id="frai-title">Frappe Pilot</div>' +
@@ -1624,6 +2213,7 @@ function _buildDOM() {
             '</div>' +
             '<div id="frai-tabs">' +
                 '<button class="frai-tab frai-tab-active" data-tab="advisor">Advisor</button>' +
+                '<button class="frai-tab" data-tab="insight">Insight</button>' +
                 '<button class="frai-tab" data-tab="build">Build</button>' +
             '</div>' +
             '<div id="frai-subtabs">' +
@@ -1635,9 +2225,19 @@ function _buildDOM() {
         '<div id="frai-body">' +
 
             '<div id="frai-pane-advisor" class="frai-tab-pane frai-pane-active">' +
+                '<div id="frai-advisor-context-bar" class="frai-advisor-context-bar" style="display:none"></div>' +
                 '<div id="frai-messages-advisor" class="frai-messages-area">' +
                     '<div id="frai-typing-advisor"><i></i><i></i><i></i>' +
                         '<span class="frai-typing-label">Analyzing…</span>' +
+                    '</div>' +
+                '</div>' +
+            '</div>' +
+
+            '<div id="frai-pane-insight" class="frai-tab-pane">' +
+                '<div id="frai-insight-context-bar" class="frai-insight-context-bar" style="display:none"></div>' +
+                '<div id="frai-messages-insight" class="frai-messages-area">' +
+                    '<div id="frai-typing-insight"><i></i><i></i><i></i>' +
+                        '<span class="frai-typing-label">Generating insight…</span>' +
                     '</div>' +
                 '</div>' +
             '</div>' +
@@ -1659,6 +2259,8 @@ function _buildDOM() {
         '</div>' +
 
         '<div id="frai-footer">' +
+            '<button type="button" id="frai-insight-new-chat" class="frai-insight-new-chat" style="display:none" title="New conversation">' +
+                '↺</button>' +
             '<textarea id="frai-input" rows="1" ' +
                 'placeholder="" ' +
                 'aria-label="Message input"></textarea>' +
@@ -1673,6 +2275,232 @@ function _buildDOM() {
     document.body.appendChild(panel);
 }
 
+
+// ════════════════════════════════════════════════════════════════
+// DESK PUSH LAYOUT
+// ════════════════════════════════════════════════════════════════
+function _getLayoutMode() {
+    return window.innerWidth >= PUSH_LAYOUT_BREAKPOINT ? "push" : "drawer";
+}
+
+function _measureDeskChrome() {
+    var root = document.documentElement;
+    var styles = getComputedStyle(root);
+    var navbarH = parseFloat(styles.getPropertyValue("--navbar-height")) || 0;
+    var pageHead = document.querySelector(".page-head:not(.hidden)");
+    var pageHeadH = pageHead ? pageHead.offsetHeight : 0;
+    return Math.round(navbarH + pageHeadH);
+}
+
+function _measureDeskSidebarWidth() {
+    var total = 0;
+    var rail = document.querySelector(".st-workspace-rail");
+    if (rail && rail.offsetParent !== null) {
+        var railDisplay = getComputedStyle(rail).display;
+        if (railDisplay !== "none") {
+            total += rail.getBoundingClientRect().width;
+        }
+    }
+    var sidebarEl = document.querySelector(".body-sidebar-container");
+    if (sidebarEl) {
+        total += sidebarEl.getBoundingClientRect().width;
+    }
+    return Math.round(total) || 50;
+}
+
+function _ensureDeskLayoutObservers() {
+    if (typeof ResizeObserver === "undefined") return;
+
+    if (!FRAI._deskLayoutObserver) {
+        FRAI._deskLayoutObserver = new ResizeObserver(function () {
+            _scheduleDeskLayout();
+            _dispatchDeskResize();
+        });
+    }
+
+    var sidebarEl = document.querySelector(".body-sidebar-container");
+    if (sidebarEl && !FRAI._deskSidebarObserved) {
+        FRAI._deskLayoutObserver.observe(sidebarEl);
+        FRAI._deskSidebarObserved = true;
+    }
+
+    var rail = document.querySelector(".st-workspace-rail");
+    if (rail && !FRAI._deskRailObserved) {
+        FRAI._deskLayoutObserver.observe(rail);
+        FRAI._deskRailObserved = true;
+    }
+
+    var pageHead = document.querySelector(".page-head:not(.hidden)");
+    if (pageHead && pageHead !== FRAI._deskPageHeadEl) {
+        if (FRAI._deskPageHeadEl) {
+            FRAI._deskLayoutObserver.unobserve(FRAI._deskPageHeadEl);
+        }
+        FRAI._deskLayoutObserver.observe(pageHead);
+        FRAI._deskPageHeadEl = pageHead;
+    }
+
+    var panel = document.getElementById("frai-panel");
+    if (panel && FRAI.isOpen) {
+        if (panel !== FRAI._deskPanelEl) {
+            if (FRAI._deskPanelEl) {
+                FRAI._deskLayoutObserver.unobserve(FRAI._deskPanelEl);
+            }
+            FRAI._deskLayoutObserver.observe(panel);
+            FRAI._deskPanelEl = panel;
+        }
+    } else if (FRAI._deskPanelEl) {
+        FRAI._deskLayoutObserver.unobserve(FRAI._deskPanelEl);
+        FRAI._deskPanelEl = null;
+    }
+}
+
+function _ensureBackdrop() {
+    var el = document.getElementById("frai-backdrop");
+    if (!el) {
+        el = document.createElement("div");
+        el.id = "frai-backdrop";
+        el.setAttribute("aria-hidden", "true");
+        el.addEventListener("click", function () {
+            closePanel();
+        });
+        document.body.appendChild(el);
+    }
+    return el;
+}
+
+function _hideBackdrop() {
+    var el = document.getElementById("frai-backdrop");
+    if (el) el.classList.remove("frai-visible");
+}
+
+function _dispatchDeskResize() {
+    requestAnimationFrame(function () {
+        window.dispatchEvent(new Event("resize"));
+    });
+}
+
+function _getDeskMainSection() {
+    return document.querySelector("body > .main-section");
+}
+
+function _clearDeskPushLayout() {
+    var body = document.body;
+    body.style.width = "";
+    body.style.maxWidth = "";
+    body.style.minWidth = "";
+    body.style.overflowX = "";
+    body.style.marginInlineStart = "";
+
+    var main = _getDeskMainSection();
+    if (!main) return;
+    main.style.height = "";
+    main.style.maxHeight = "";
+    main.style.overflow = "";
+    main.style.overflowX = "";
+    main.style.overflowY = "";
+}
+
+function _applyDeskPushLayout(pos, width, height, mode) {
+    _clearDeskPushLayout();
+    if (mode !== "push") return;
+
+    var body = document.body;
+    var main = _getDeskMainSection();
+
+    if (pos === "bottom") {
+        body.style.width = "100vw";
+        body.style.maxWidth = "100vw";
+        body.style.minWidth = "0";
+        body.style.overflowX = "hidden";
+        if (main) {
+            var mainH = "calc(100dvh - " + height + "px)";
+            main.style.height = mainH;
+            main.style.maxHeight = mainH;
+            main.style.overflowX = "hidden";
+            main.style.overflowY = "auto";
+        }
+        return;
+    }
+
+    if (pos === "right" || pos === "left") {
+        var deskW = "calc(100vw - " + width + "px)";
+        body.style.width = deskW;
+        body.style.maxWidth = deskW;
+        body.style.minWidth = "0";
+        body.style.overflowX = "hidden";
+        if (pos === "left") {
+            body.style.marginInlineStart = width + "px";
+        }
+    }
+}
+
+function _syncDeskLayout() {
+    _ensureDeskLayoutObservers();
+
+    var body = document.body;
+    var panel = document.getElementById("frai-panel");
+    var root = document.documentElement;
+    var pos = FRAI.sidebarPosition || "right";
+    var width = FRAI.panelWidth || _loadPanelWidth();
+    var height = FRAI.panelHeight || _loadPanelHeight() || PANEL_HEIGHT_MIN;
+
+    if (panel && FRAI.isOpen) {
+        if (pos === "bottom") {
+            height = panel.offsetHeight || height;
+        } else {
+            width = panel.offsetWidth || width;
+        }
+    }
+
+    root.style.setProperty("--frai-panel-width", width + "px");
+    root.style.setProperty("--frai-panel-height", height + "px");
+    root.style.setProperty("--frai-desk-chrome-top", _measureDeskChrome() + "px");
+    root.style.setProperty("--frai-desk-sidebar-width", _measureDeskSidebarWidth() + "px");
+
+    ["right", "left", "bottom"].forEach(function (p) {
+        body.classList.remove("frai-pos-" + p);
+    });
+    body.classList.remove("frai-layout-push", "frai-layout-drawer");
+    body.classList.toggle("frai-panel-open", !!FRAI.isOpen);
+
+    if (panel) {
+        panel.classList.remove("frai-layout-push", "frai-layout-drawer");
+    }
+
+    if (!FRAI.isOpen) {
+        _clearDeskPushLayout();
+        _hideBackdrop();
+        _dispatchDeskResize();
+        return;
+    }
+
+    body.classList.add("frai-pos-" + pos);
+    var mode = _getLayoutMode();
+
+    if (mode === "push") {
+        body.classList.add("frai-layout-push");
+        if (panel) panel.classList.add("frai-layout-push");
+        _applyDeskPushLayout(pos, width, height, mode);
+        _setTriggerEdgeOffset(width, height, pos);
+        _hideBackdrop();
+        _dispatchDeskResize();
+        return;
+    }
+
+    _clearDeskPushLayout();
+    body.classList.add("frai-layout-drawer");
+    if (panel) panel.classList.add("frai-layout-drawer");
+    _ensureBackdrop().classList.add("frai-visible");
+    _dispatchDeskResize();
+}
+
+var _scheduleDeskLayout = function () {
+    var timer = null;
+    return function () {
+        clearTimeout(timer);
+        timer = setTimeout(_syncDeskLayout, 80);
+    };
+}();
 
 // ════════════════════════════════════════════════════════════════
 // SIDEBAR POSITION
@@ -1708,21 +2536,43 @@ function _applySidebarPosition(pos) {
     _syncPositionToggle();
 }
 
-function _syncTriggerOffset() {
+var TRIGGER_EDGE_OVERLAP = 18;
+
+function _setTriggerEdgeOffset(width, height, pos) {
     var trigger = document.getElementById("frai-trigger");
     if (!trigger) return;
-    var pos = FRAI.sidebarPosition || "right";
-    var edge = "0px";
 
-    if (FRAI.isOpen) {
-        if (pos === "right" || pos === "left") {
-            edge = FRAI.panelWidth + "px";
+    if (!FRAI.isOpen || _getLayoutMode() === "drawer") {
+        trigger.style.setProperty("--frai-trigger-edge", "0px");
+        return;
+    }
+
+    pos = pos || FRAI.sidebarPosition || "right";
+    var edgePx = 0;
+    if (pos === "bottom") {
+        edgePx = Math.max(0, (height || 0) - TRIGGER_EDGE_OVERLAP);
+    } else {
+        edgePx = Math.max(0, (width || 0) - TRIGGER_EDGE_OVERLAP);
+    }
+    trigger.style.setProperty("--frai-trigger-edge", edgePx + "px");
+}
+
+function _syncTriggerOffset() {
+    var panel = document.getElementById("frai-panel");
+    var pos = FRAI.sidebarPosition || "right";
+    var width = FRAI.panelWidth || _loadPanelWidth();
+    var height = FRAI.panelHeight || _loadPanelHeight() || PANEL_HEIGHT_MIN;
+
+    if (panel && FRAI.isOpen) {
+        if (pos === "bottom") {
+            height = panel.offsetHeight || height;
         } else {
-            edge = (FRAI.panelHeight || _loadPanelHeight()) + "px";
+            width = panel.offsetWidth || width;
         }
     }
 
-    trigger.style.setProperty("--frai-trigger-edge", edge);
+    _setTriggerEdgeOffset(width, height, pos);
+    _syncDeskLayout();
 }
 
 function _syncPositionToggle() {
@@ -1796,7 +2646,10 @@ function _bindResizeEvents() {
                 panel.style.width = newWidthR + "px";
                 _savePanelWidth(newWidthR);
             }
-            if (FRAI.isOpen) _syncTriggerOffset();
+            if (FRAI.isOpen) {
+                _syncTriggerOffset();
+                _scheduleDeskLayout();
+            }
         }
         function onMouseUp() {
             FRAI.isResizing = false;
@@ -1830,6 +2683,17 @@ function _bindEvents() {
     if (sendEl)    sendEl.addEventListener("click", sendMessage);
     if (gearEl)    gearEl.addEventListener("click", _openPilotSettings);
 
+    var insightNewChat = document.getElementById("frai-insight-new-chat");
+    if (insightNewChat) {
+        insightNewChat.addEventListener("click", function () {
+            if (FRAI.activeTab === "advisor") {
+                _clearAdvisorConversation();
+            } else {
+                _clearInsightConversation();
+            }
+        });
+    }
+
     document.querySelectorAll("#frai-tabs .frai-tab").forEach(function (btn) {
         btn.addEventListener("click", function () { switchTab(btn.dataset.tab); });
     });
@@ -1862,13 +2726,16 @@ function _bindEvents() {
 
     if (frappe.router) {
         frappe.router.on("change", _scheduleContextOnNavigate);
+        frappe.router.on("change", _scheduleDeskLayout);
     }
 
     $(document).on("page-change form-refresh form-load form-rename", function () {
         _scheduleContextOnNavigate();
+        _scheduleDeskLayout();
     });
 
     window.addEventListener("hashchange", _scheduleContextOnNavigate);
+    window.addEventListener("resize", _scheduleDeskLayout);
 }
 
 function _scheduleContextCheck() {
@@ -1886,6 +2753,8 @@ function _scheduleContextOnNavigate() {
     FRAI._ctxTimer2 = setTimeout(_updateContext, 600);
     FRAI._ctxTimer3 = setTimeout(_updateContext, 1200);
     FRAI._ctxTimer4 = setTimeout(_updateContext, 2000);
+    _scheduleDeskLayout();
+    setTimeout(_syncDeskLayout, 400);
 }
 
 
@@ -1914,7 +2783,17 @@ function _openPilotSettings() {
 
 function _applyTabVisibility() {
     var cfg = FRAI.config || {};
+    var advisorTab = document.querySelector('#frai-tabs .frai-tab[data-tab="advisor"]');
+    var insightTab = document.querySelector('#frai-tabs .frai-tab[data-tab="insight"]');
     var buildTab = document.querySelector('#frai-tabs .frai-tab[data-tab="build"]');
+    if (advisorTab) {
+        var showAdvisor = cfg.advisor_enabled !== false && cfg.can_access_advisor !== false;
+        advisorTab.style.display = showAdvisor ? "" : "none";
+    }
+    if (insightTab) {
+        var showInsight = cfg.insight_enabled !== false && cfg.can_access_insight;
+        insightTab.style.display = showInsight ? "" : "none";
+    }
     if (buildTab) {
         var showBuild = cfg.build_enabled !== false && cfg.can_access_build;
         buildTab.style.display = showBuild ? "" : "none";
@@ -1922,8 +2801,23 @@ function _applyTabVisibility() {
     if (cfg.default_tab && _hasApiKey()) {
         var t = cfg.default_tab;
         if (t === "analyze" || t === "guide") t = "advisor";
+        if (t === "advisor" && advisorTab && advisorTab.style.display === "none") {
+            t = insightTab && insightTab.style.display !== "none" ? "insight" : "build";
+        }
+        if (t === "insight" && insightTab && insightTab.style.display === "none") {
+            t = advisorTab && advisorTab.style.display !== "none" ? "advisor" : "build";
+        }
         if (t === "build" && buildTab && buildTab.style.display === "none") {
-            t = "advisor";
+            t = advisorTab && advisorTab.style.display !== "none" ? "advisor" : "insight";
+        }
+        if (
+            (t === "advisor" && advisorTab && advisorTab.style.display === "none") ||
+            (t === "insight" && insightTab && insightTab.style.display === "none") ||
+            (t === "build" && buildTab && buildTab.style.display === "none")
+        ) {
+            if (advisorTab && advisorTab.style.display !== "none") t = "advisor";
+            else if (insightTab && insightTab.style.display !== "none") t = "insight";
+            else t = "build";
         }
         FRAI.activeTab = t;
         switchTab(t);
@@ -1941,7 +2835,8 @@ function _showApiSetupState() {
 
     var cfg = FRAI.config || {};
     var canConfig = cfg.can_configure_api;
-    var provider = cfg.active_provider || "Groq";
+    var provider = cfg.active_provider_label || cfg.active_provider || "Groq";
+    var providerOptions = cfg.llm_provider_options || [];
 
     if (subtitle) {
         if (!FRAI._savedSubtitle) FRAI._savedSubtitle = subtitle.textContent;
@@ -1984,9 +2879,15 @@ function _showApiSetupState() {
             ctaHtml +
             '<div class="frai-api-setup-secondary">' + secondary + '</div>' +
             '<div class="frai-api-setup-providers">' +
-                '<span class="' + _providerChipClass("Groq", provider).trim() + '">Groq</span>' +
-                '<span class="' + _providerChipClass("OpenAI", provider).trim() + '">OpenAI</span>' +
-                '<span class="' + _providerChipClass("Gemini", provider).trim() + '">Gemini</span>' +
+                (providerOptions.length
+                    ? providerOptions.map(function (opt) {
+                        var label = opt.row_label || opt.provider;
+                        var active = opt.name === cfg.active_llm_row;
+                        return '<span class="' + (active ? "frai-provider-active" : "") + '">' +
+                            label + " (P" + opt.priority + ")</span>";
+                    }).join("")
+                    : '<span class="frai-provider-active">Groq</span>' +
+                      '<span>OpenAI</span><span>Gemini</span><span>Mistral</span>') +
             '</div>' +
         '</div>';
 
@@ -2017,6 +2918,7 @@ function _refreshPilotConfig(callback) {
         callback: function (r) {
             if (r && r.message) {
                 FRAI.config = r.message;
+            if (window.FRAI_ENGINE && FRAI_ENGINE.init) FRAI_ENGINE.init(FRAI.config);
                 FRAI.suggestionsCache = {};
                 _normalizeSidebarLocale();
                 _renderLocaleToggle();
@@ -2046,6 +2948,14 @@ function _syncTriggerState() {
         "aria-label",
         FRAI.isOpen ? _ui("trigger_close_label") : _ui("trigger_title")
     );
+    trigger.setAttribute(
+        "title",
+        FRAI.isOpen ? _ui("trigger_close_label") : _ui("trigger_title")
+    );
+    var label = document.getElementById("frai-trigger-label");
+    if (label) {
+        label.textContent = FRAI.isOpen ? _ui("trigger_close_short") : _ui("trigger_label");
+    }
 }
 
 function openPanel() {
@@ -2062,6 +2972,9 @@ function openPanel() {
     panel.classList.add("frai-open");
     _syncTriggerState();
     _syncTriggerOffset();
+    requestAnimationFrame(function () {
+        _syncTriggerOffset();
+    });
 
     _refreshPilotConfig(function () {
         if (!_hasApiKey()) {
@@ -2089,6 +3002,15 @@ function closePanel() {
 // ════════════════════════════════════════════════════════════════
 function switchTab(tab) {
     if (tab === "analyze" || tab === "guide") tab = "advisor";
+    if (window.FRAI_ENGINE && FRAI_ENGINE.onSwitchTab(tab)) {
+        FRAI.activeTab = tab;
+        document.querySelectorAll("#frai-tabs .frai-tab").forEach(function (b) {
+            b.classList.toggle("frai-tab-active", b.dataset.tab === tab);
+        });
+        var subtabs = document.getElementById("frai-subtabs");
+        if (subtabs) subtabs.classList.remove("frai-subtabs-visible");
+        return;
+    }
     if (!_hasApiKey()) {
         FRAI.activeTab = tab;
         if (FRAI.isOpen) _showApiSetupState();
@@ -2119,9 +3041,26 @@ function switchTab(tab) {
     var sendEl = document.getElementById("frai-send");
     if (footer) footer.style.display = "flex";
     if (sendEl) sendEl.disabled = false;
+    _updateInsightFooter(tab === "insight" || tab === "advisor");
 
-    if (FRAI.config && FRAI.config.advisor_enabled === false) {
-        _addBubble("Advisor is disabled in Pilot Settings.", "frai-error");
+    if (tab === "insight") {
+        if (FRAI.config && (!FRAI.config.insight_enabled || !FRAI.config.can_access_insight)) {
+            var insightPaneErr = document.getElementById("frai-pane-insight");
+            if (insightPaneErr) insightPaneErr.classList.add("frai-pane-active");
+            _addInsightBubble("Insight is disabled or you do not have permission.", "frai-error");
+            return;
+        }
+        var insightPane = document.getElementById("frai-pane-insight");
+        if (insightPane) insightPane.classList.add("frai-pane-active");
+        _initInsightContextFromDefaults();
+        _renderInsightContextBar();
+        _updateInputPlaceholder();
+        _showActiveWelcome();
+        return;
+    }
+
+    if (FRAI.config && (FRAI.config.advisor_enabled === false || !FRAI.config.can_access_advisor)) {
+        _addBubble("Advisor is disabled or you do not have permission.", "frai-error");
         return;
     }
 
@@ -2151,6 +3090,7 @@ function switchBuildSubtab(subtab) {
 
     var subtabs = document.getElementById("frai-subtabs");
     if (subtabs) subtabs.classList.add("frai-subtabs-visible");
+    _updateInsightFooter(false);
 
     document.querySelectorAll(".frai-tab-pane").forEach(function (p) {
         p.classList.remove("frai-pane-active");
@@ -2188,6 +3128,11 @@ function _showActiveWelcome() {
         var advisorMsgs = document.getElementById("frai-messages-advisor");
         if (advisorMsgs && advisorMsgs.querySelectorAll(".frai-bubble").length === 0) {
             _showAdvisorWelcome();
+        }
+    } else if (FRAI.activeTab === "insight") {
+        var insightMsgs = document.getElementById("frai-messages-insight");
+        if (insightMsgs && insightMsgs.querySelectorAll(".frai-bubble, .frai-micro-report").length === 0) {
+            _showInsightWelcome();
         }
     } else if (FRAI.activeTab === "build" && FRAI.activeBuildSubtab !== "changes") {
         var codingMsgs = document.getElementById("frai-messages-coding");
@@ -2365,8 +3310,13 @@ function _updateContext() {
                  (FRAI.listDoctype || "") + "|" + (FRAI.route || "");
     if (FRAI.lastContextKey && FRAI.lastContextKey !== ctxKey) {
         FRAI.suggestionsCache = {};
+        var persistAdvisor = FRAI.config && FRAI.config.advisor_persist_chat_on_route;
         if (_hasApiKey() && !_isApiSetupMode()) {
-            _resetChatPane("frai-messages-advisor", _showAdvisorWelcome);
+            if (!persistAdvisor) {
+                _resetChatPane("frai-messages-advisor", _showAdvisorWelcome);
+            } else {
+                _refreshAdvisorContextBar();
+            }
             if (FRAI.activeTab === "build") {
                 _resetChatPane("frai-messages-coding", _showCodingWelcome);
             }
@@ -2505,20 +3455,16 @@ function _ui(key) {
 function _applyPilotLocale() {
     _renderLocaleToggle();
 
-    var trigger = document.getElementById("frai-trigger-label");
-    if (trigger) trigger.textContent = _ui("trigger_label");
-
     var triggerWrap = document.getElementById("frai-trigger");
-    if (triggerWrap) {
-        triggerWrap.setAttribute("title", FRAI.isOpen ? _ui("trigger_close_label") : _ui("trigger_title"));
-        _syncTriggerState();
-    }
+    if (triggerWrap) _syncTriggerState();
 
     var panel = document.getElementById("frai-panel");
     if (panel) panel.setAttribute("aria-label", _ui("panel_title"));
 
     var advisorBtn = document.querySelector('#frai-tabs .frai-tab[data-tab="advisor"]');
     if (advisorBtn) advisorBtn.textContent = _ui("tab_advisor");
+    var insightBtn = document.querySelector('#frai-tabs .frai-tab[data-tab="insight"]');
+    if (insightBtn) insightBtn.textContent = _ui("tab_insight");
     var buildBtn = document.querySelector('#frai-tabs .frai-tab[data-tab="build"]');
     if (buildBtn) buildBtn.textContent = _ui("tab_build");
 
@@ -2616,6 +3562,11 @@ function _updateInputPlaceholder() {
     var input = document.getElementById("frai-input");
     if (!input || input.disabled) return;
     if (FRAI.activeTab === "build" && FRAI.activeBuildSubtab === "changes") return;
+
+    if (FRAI.activeTab === "insight") {
+        input.placeholder = _ui("placeholder_insight") || PLACEHOLDER_FALLBACKS.placeholder_insight;
+        return;
+    }
 
     _resolveFormContext();
 
@@ -2816,6 +3767,7 @@ function _normalizeChip(chip) {
         locale: chip.locale || "en",
         prompt_en: chip.prompt_en || "",
         mode: chip.mode || "explain",
+        preset_id: chip.preset_id || "",
     };
 }
 
@@ -2863,8 +3815,13 @@ function _renderChips(chips, container) {
             var inputEl = document.getElementById("frai-input");
             if (inputEl) inputEl.value = chip.prompt;
             FRAI.replyLocale = chip.locale || "en";
+            FRAI.pendingPresetId = "";
             if (FRAI.activeTab === "advisor") {
                 FRAI.analyzeMode = _chipAnalyzeMode(chip);
+            }
+            if (FRAI.activeTab === "insight") {
+                var meta = (FRAI.chipMeta && FRAI.chipMeta[chip.prompt]) || {};
+                FRAI.pendingPresetId = chip.preset_id || meta.preset_id || "";
             }
             _removeAllChips();
             sendMessage();
@@ -2886,7 +3843,7 @@ function _renderChips(chips, container) {
     container.appendChild(wrap);
 }
 
-function _renderWelcomeBubble(greet, chips, chipMeta) {
+function _renderWelcomeBubble(greet, chips, chipMeta, chipGroups) {
     _applyChipMeta(chipMeta);
     var msgs = _getActiveMsgs();
     var typing = document.getElementById(_getTypingId());
@@ -2895,7 +3852,17 @@ function _renderWelcomeBubble(greet, chips, chipMeta) {
     var bubble = document.createElement("div");
     bubble.className = "frai-bubble frai-agent";
     bubble.innerHTML = greet;
-    _renderChips(chips, bubble);
+    if (chipGroups && chipGroups.length) {
+        chipGroups.forEach(function (group) {
+            var label = document.createElement("div");
+            label.className = "frai-chip-group-label";
+            label.textContent = group.label || "";
+            bubble.appendChild(label);
+            _renderChips(group.chips || [], bubble);
+        });
+    } else {
+        _renderChips(chips, bubble);
+    }
 
     if (typing && msgs.contains(typing)) {
         msgs.insertBefore(bubble, typing);
@@ -2911,6 +3878,16 @@ function _renderWelcomeBubble(greet, chips, chipMeta) {
 function _showAdvisorWelcome() {
     _fetchSuggestions("advisor", function (data) {
         var greet = data.greet || "Ask me anything about this page or document:";
+        _renderAdvisorContextBar(data.context_bar);
+        _renderWelcomeBubble(greet, data.chips || [], data.chip_meta, data.chip_groups);
+        _updateInsightFooter(true);
+    });
+    _refreshAdvisorContextBar();
+}
+
+function _showInsightWelcome() {
+    _fetchSuggestions("insight", function (data) {
+        var greet = data.greet || "Ask about business performance across your company:";
         _renderWelcomeBubble(greet, data.chips || [], data.chip_meta);
     });
 }
@@ -2929,6 +3906,7 @@ function sendMessage() {
         sendCodingMessage();
         return;
     }
+    if (FRAI.activeTab === "insight") { sendInsightMessage(); return; }
     if (FRAI.activeTab === "advisor") { sendAdvisorMessage(); return; }
 }
 
@@ -2936,8 +3914,9 @@ function _syncFormContext() {
     _resolveFormContext();
 }
 
-function _addContextHint(summary, evidence) {
+function _addContextHint(summary, evidence, hideHint) {
     if (FRAI.activeTab !== "advisor") return;
+    if (hideHint) return;
     if (FRAI.config && FRAI.config.show_evidence === false) return;
     if (!summary && !(evidence && evidence.tools_used && evidence.tools_used.length)) return;
 
@@ -2980,6 +3959,272 @@ function _addContextHint(summary, evidence) {
         msgs.appendChild(hint);
     }
     _scrollBottom();
+}
+
+function _pinLlmRow(rowName, callback) {
+    if (!rowName) return;
+    frappe.call({
+        method: "frappe_pilot.api.config.set_session_llm_row",
+        args: { row_name: rowName },
+        callback: function (r) {
+            if (r && r.message && r.message.ok) {
+                _refreshPilotConfig(callback);
+            } else if (callback) {
+                callback();
+            }
+        },
+    });
+}
+
+function _renderLlmFailoverChips(container, llmExhausted) {
+    if (!container || !llmExhausted) return;
+    var suggested = llmExhausted.suggested_rows || [];
+    if (!suggested.length) return;
+
+    var wrap = document.createElement("div");
+    wrap.className = "frai-llm-failover";
+
+    var title = document.createElement("div");
+    title.className = "frai-llm-failover-title";
+    title.textContent = "Try another provider row";
+    wrap.appendChild(title);
+
+    var chips = document.createElement("div");
+    chips.className = "frai-llm-failover-chips";
+
+    var cfg = FRAI.config || {};
+    var activeRow = cfg.active_llm_row;
+
+    suggested.forEach(function (row) {
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "frai-llm-failover-chip" +
+            (row.name === activeRow ? " frai-llm-failover-active" : "");
+        btn.textContent = (row.row_label || row.provider) + " (P" + row.priority + ")";
+        btn.addEventListener("click", function () {
+            _pinLlmRow(row.name, function () {
+                frappe.show_alert({
+                    message: "Switched to " + (row.row_label || row.provider),
+                    indicator: "blue",
+                });
+            });
+        });
+        chips.appendChild(btn);
+    });
+
+    wrap.appendChild(chips);
+    container.appendChild(wrap);
+}
+
+function _formatAdvisorReply(text) {
+    if (!text) return "—";
+    var safe = _escapeHtml(text);
+    safe = safe.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+    safe = safe.replace(/\n/g, "<br>");
+    var firstBreak = safe.indexOf("<br>");
+    if (firstBreak > 0 && firstBreak < 180) {
+        return '<div class="frai-advisor-headline">' + safe.slice(0, firstBreak) + "</div>" +
+            safe.slice(firstBreak + 4);
+    }
+    return safe;
+}
+
+function _renderAdvisorContextBar(contextBar) {
+    var bar = document.getElementById("frai-advisor-context-bar");
+    if (!bar) return;
+    if (!contextBar || !contextBar.label) {
+        bar.style.display = "none";
+        bar.textContent = "";
+        return;
+    }
+    bar.style.display = "block";
+    bar.textContent = contextBar.label;
+}
+
+function _refreshAdvisorContextBar() {
+    if (!(FRAI.config && FRAI.config.advisor_show_context_bar)) return;
+    _syncFormContext();
+    var pageContext = _collectPageContext();
+    frappe.call({
+        method: "frappe_pilot.api.analyze.get_context_bar",
+        args: {
+            doctype: FRAI.doctype || "",
+            docname: FRAI.isNew ? "" : (FRAI.docname || ""),
+            route: FRAI.route || "",
+            list_doctype: FRAI.listDoctype || pageContext.list_doctype || "",
+            page_context: JSON.stringify(pageContext),
+        },
+        callback: function (r) {
+            if (r && r.message) _renderAdvisorContextBar(r.message);
+        },
+    });
+}
+
+function _renderAdvisorCard(container, advisorCard) {
+    if (!container || !advisorCard || advisorCard.error) return null;
+
+    var card = document.createElement("div");
+    card.className = "frai-advisor-card";
+
+    var header = document.createElement("div");
+    header.className = "frai-advisor-card-header";
+    var title = advisorCard.title || advisorCard.headline || "Details";
+    var headerLeft = document.createElement("span");
+    headerLeft.textContent = title;
+    header.appendChild(headerLeft);
+    var headerRight = document.createElement("div");
+    headerRight.style.display = "flex";
+    headerRight.style.alignItems = "center";
+    headerRight.style.gap = "8px";
+    if (advisorCard.total_display || advisorCard.total != null) {
+        var totalEl = document.createElement("span");
+        totalEl.textContent = String(advisorCard.total_display || advisorCard.total);
+        headerRight.appendChild(totalEl);
+    }
+    var copyBtn = document.createElement("button");
+    copyBtn.type = "button";
+    copyBtn.className = "frai-micro-report-copy-btn";
+    copyBtn.title = _ui("advisor_card_copy") || "Copy breakdown";
+    copyBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+    copyBtn.addEventListener("click", function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        _copyAdvisorCard(advisorCard);
+    });
+    headerRight.appendChild(copyBtn);
+    header.appendChild(headerRight);
+    card.appendChild(header);
+
+    if (advisorCard.warnings && advisorCard.warnings.length) {
+        var warnBox = document.createElement("div");
+        warnBox.className = "frai-micro-report-warnings";
+        var warnTitle = document.createElement("div");
+        warnTitle.className = "frai-micro-report-warnings-title";
+        warnTitle.textContent = _ui("insight_partial_results") || "Partial results";
+        warnBox.appendChild(warnTitle);
+        var warnList = document.createElement("ul");
+        advisorCard.warnings.forEach(function (w) {
+            var li = document.createElement("li");
+            li.textContent = w;
+            warnList.appendChild(li);
+        });
+        warnBox.appendChild(warnList);
+        card.appendChild(warnBox);
+    }
+
+    var rows = advisorCard.rows || [];
+    if (rows.length) {
+        var table = document.createElement("table");
+        var thead = document.createElement("thead");
+        var trHead = document.createElement("tr");
+        [
+            _ui("advisor_card_item") || "Item",
+            _ui("advisor_card_calculation") || "Calculation",
+            _ui("advisor_card_amount") || "Amount",
+        ].forEach(function (label) {
+            var th = document.createElement("th");
+            th.textContent = label;
+            trHead.appendChild(th);
+        });
+        thead.appendChild(trHead);
+        table.appendChild(thead);
+        var tbody = document.createElement("tbody");
+        rows.slice(0, 20).forEach(function (row) {
+            var tr = document.createElement("tr");
+            [
+                row.label || row.item || "",
+                row.calculation || row.formula || "",
+                row.amount_display || String(row.amount || ""),
+            ].forEach(function (cell) {
+                var td = document.createElement("td");
+                td.textContent = cell;
+                tr.appendChild(td);
+            });
+            tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        card.appendChild(table);
+    }
+
+    if (advisorCard.type === "diagnose") {
+        _appendAdvisorCardSection(card, _ui("advisor_card_findings") || "Findings", advisorCard.findings || advisorCard.issues || [], "message");
+        _appendAdvisorCardSection(card, _ui("advisor_card_evidence") || "Evidence", advisorCard.evidence || [], null);
+        _appendAdvisorCardSection(card, _ui("advisor_card_verify") || "What to verify", advisorCard.verify || [], null);
+    }
+
+    if (advisorCard.assumptions && advisorCard.assumptions.length) {
+        var assume = document.createElement("div");
+        assume.className = "frai-advisor-card-footer";
+        assume.innerHTML = "<strong>" + _escapeHtml(_ui("advisor_card_assumptions") || "Assumptions") + ":</strong> " +
+            _escapeHtml(advisorCard.assumptions.join(" · "));
+        card.appendChild(assume);
+    }
+
+    var footerText = advisorCard.footer ||
+        "Before taxes and discounts. Update quantities on the form manually — Advisor is read-only.";
+    var footer = document.createElement("div");
+    footer.className = "frai-advisor-card-footer";
+    footer.textContent = footerText;
+    card.appendChild(footer);
+
+    container.appendChild(card);
+    return card;
+}
+
+function _appendAdvisorCardSection(card, title, items, messageKey) {
+    if (!items || !items.length) return;
+    var section = document.createElement("div");
+    section.className = "frai-advisor-card-section";
+    var heading = document.createElement("div");
+    heading.className = "frai-advisor-card-section-title";
+    heading.textContent = title;
+    section.appendChild(heading);
+    var list = document.createElement("ul");
+    items.forEach(function (item) {
+        var li = document.createElement("li");
+        if (typeof item === "string") {
+            li.textContent = item;
+        } else {
+            li.textContent = (messageKey && item[messageKey]) || item.message || item.label || JSON.stringify(item);
+        }
+        list.appendChild(li);
+    });
+    section.appendChild(list);
+    card.appendChild(section);
+}
+
+function _copyAdvisorCard(advisorCard) {
+    var lines = [];
+    if (advisorCard.title) lines.push(advisorCard.title);
+    if (advisorCard.total_display || advisorCard.total != null) {
+        lines.push(String(advisorCard.total_display || advisorCard.total));
+    }
+    (advisorCard.rows || []).forEach(function (row) {
+        lines.push([
+            row.label || row.item || "",
+            row.calculation || "",
+            row.amount_display || row.amount || "",
+        ].join("\t"));
+    });
+    var text = lines.join("\n");
+    if (typeof frappe !== "undefined" && frappe.utils && frappe.utils.copy_to_clipboard) {
+        frappe.utils.copy_to_clipboard(text, _ui("advisor_card_copy") || "Copy breakdown");
+    }
+}
+
+function _clearAdvisorConversation() {
+    frappe.call({
+        method: "frappe_pilot.api.analyze.clear_history",
+        callback: function () {
+            var msgs = document.getElementById("frai-messages-advisor");
+            if (msgs) {
+                var typing = document.getElementById("frai-typing-advisor");
+                msgs.innerHTML = "";
+                if (typing) msgs.appendChild(typing);
+            }
+            _showAdvisorWelcome();
+        },
+    });
 }
 
 function sendAdvisorMessage() {
@@ -3028,13 +4273,27 @@ function sendAdvisorMessage() {
                 if (r.message.reply_locale) {
                     FRAI.replyLocale = r.message.reply_locale;
                 }
-                _addAdvisorBubble(
-                    r.message.reply || "—",
+                var formatted = _formatAdvisorReply(r.message.reply || "—");
+                var bubble = _addAdvisorBubble(
+                    formatted,
                     r.message.chips,
                     r.message.nav_links,
                     r.message.navigation_action
                 );
-                _addContextHint(r.message.context_summary || "", r.message.evidence || null);
+                if (r.message.advisor_card && bubble) {
+                    _renderAdvisorCard(bubble, r.message.advisor_card);
+                }
+                if (r.message.llm_exhausted && bubble) {
+                    _renderLlmFailoverChips(bubble, r.message.llm_exhausted);
+                }
+                if (r.message.context_bar) {
+                    _renderAdvisorContextBar(r.message.context_bar);
+                }
+                _addContextHint(
+                    r.message.context_summary || "",
+                    r.message.evidence || null,
+                    r.message.hide_evidence_hint
+                );
             } else {
                 _addBubble("No response received.", "frai-error");
             }
@@ -3046,6 +4305,496 @@ function sendAdvisorMessage() {
             _addBubble("Could not reach the server. Check that Frappe Pilot is installed.", "frai-error");
             console.error("[Frappe Pilot] advisor error:", err);
         }
+    });
+}
+
+function _escapeHtml(str) {
+    return String(str || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+}
+
+function _updateInsightFooter(show) {
+    var btn = document.getElementById("frai-insight-new-chat");
+    if (btn) {
+        btn.style.display = show ? "inline-flex" : "none";
+        var label = FRAI.activeTab === "advisor"
+            ? (_ui("advisor_new_conversation") || "Clear conversation")
+            : (_ui("insight_new_conversation") || "New conversation");
+        btn.setAttribute("title", label);
+    }
+}
+
+function _loadInsightContextFromStorage() {
+    try {
+        var raw = localStorage.getItem("frai_insight_context");
+        if (raw) FRAI.insightContext = JSON.parse(raw) || {};
+    } catch (e) {
+        FRAI.insightContext = {};
+    }
+}
+
+function _saveInsightContextToStorage() {
+    try {
+        localStorage.setItem("frai_insight_context", JSON.stringify(FRAI.insightContext || {}));
+    } catch (e) {}
+}
+
+function _initInsightContextFromDefaults() {
+    _loadInsightContextFromStorage();
+    if (FRAI.insightContext && FRAI.insightContext.company) return;
+    frappe.call({
+        method: "frappe_pilot.api.insight.get_defaults",
+        callback: function (r) {
+            if (r.message) {
+                FRAI.insightContext = r.message;
+                _saveInsightContextToStorage();
+                _renderInsightContextBar();
+            }
+        },
+    });
+}
+
+function _renderInsightContextBar() {
+    var bar = document.getElementById("frai-insight-context-bar");
+    if (!bar) return;
+    _loadInsightContextFromStorage();
+    var ctx = FRAI.insightContext || {};
+    var parts = [];
+    if (ctx.company) parts.push("Co: " + ctx.company);
+    if (ctx.fiscal_year) parts.push("FY: " + ctx.fiscal_year);
+    if (ctx.from_date && ctx.to_date) parts.push(ctx.from_date + " → " + ctx.to_date);
+    if (!parts.length) {
+        bar.style.display = "none";
+        bar.innerHTML = "";
+        return;
+    }
+    bar.style.display = "block";
+    bar.textContent = parts.join(" · ");
+}
+
+function _clearInsightConversation() {
+    frappe.call({
+        method: "frappe_pilot.api.insight.clear_history",
+        callback: function () {
+            var msgs = document.getElementById("frai-messages-insight");
+            if (msgs) {
+                var typing = document.getElementById("frai-typing-insight");
+                msgs.innerHTML = "";
+                if (typing) msgs.appendChild(typing);
+            }
+            FRAI.lastMicroReport = null;
+            _showInsightWelcome();
+        },
+    });
+}
+
+function _addInsightBubble(html, cssClass, chips, navLinks) {
+    return _addBubble(html, cssClass || "frai-agent", chips, navLinks, null);
+}
+
+function _columnLabel(col) {
+    if (!col) return "";
+    if (typeof col === "string") return col;
+    return col.label || col.fieldname || "";
+}
+
+function _columnFieldname(col) {
+    if (!col) return "";
+    if (typeof col === "string") return col;
+    return col.fieldname || col.label || "";
+}
+
+function _isNumericColumn(col) {
+    var ft = typeof col === "object" ? col.fieldtype : "";
+    return ft === "Currency" || ft === "Float" || ft === "Int" || ft === "Percent";
+}
+
+function _cellDisplayValue(row, fieldname) {
+    if (!row || !fieldname) return "—";
+    if (Array.isArray(row)) return "—";
+    var val = row[fieldname];
+    if (val === null || val === undefined || val === "") return "—";
+    return String(val);
+}
+
+function _cellLinkValue(row, fieldname) {
+    if (!row || Array.isArray(row)) return "";
+    return row["_" + fieldname] || row[fieldname] || "";
+}
+
+function _microReportTableColumns(table) {
+    var cols = (table && table.columns) || [];
+    if (cols.length) return cols;
+    var first = table && table.rows && table.rows[0];
+    if (!first) return [];
+    if (Array.isArray(first)) {
+        return first.map(function (_cell, idx) {
+            return "Column " + (idx + 1);
+        });
+    }
+    return Object.keys(first)
+        .filter(function (key) { return key.charAt(0) !== "_"; })
+        .map(function (key) {
+            return { fieldname: key, label: key };
+        });
+}
+
+function _copyMicroReportTable(table) {
+    if (!table || !table.rows || !table.rows.length) {
+        frappe.show_alert({ message: __("No rows to copy"), indicator: "orange" });
+        return;
+    }
+    var cols = _microReportTableColumns(table);
+    var headers = cols.map(_columnLabel);
+    var lines = [headers.join("\t")];
+    var isLegacyArray = Array.isArray(table.rows[0]);
+
+    table.rows.forEach(function (row) {
+        if (isLegacyArray) {
+            lines.push((row || []).map(function (cell) {
+                return cell == null || cell === "" ? "" : String(cell);
+            }).join("\t"));
+            return;
+        }
+        var cells = cols.map(function (col) {
+            var fn = _columnFieldname(col);
+            var val = _cellDisplayValue(row, fn);
+            return val === "—" ? "" : val;
+        });
+        lines.push(cells.join("\t"));
+    });
+
+    var tsv = lines.join("\n");
+    if (typeof frappe !== "undefined" && frappe.utils && frappe.utils.copy_to_clipboard) {
+        frappe.utils.copy_to_clipboard(tsv, __("Table copied to clipboard"));
+        return;
+    }
+
+    // Last-resort fallback when frappe.utils is unavailable
+    var textarea = document.createElement("textarea");
+    textarea.value = tsv;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.left = "-9999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+    try {
+        document.execCommand("copy");
+        frappe.show_alert({ message: __("Table copied to clipboard"), indicator: "green" });
+    } catch (err) {
+        frappe.show_alert({ message: __("Copy failed"), indicator: "red" });
+    }
+    document.body.removeChild(textarea);
+}
+
+function _renderTableCell(td, row, col, tableDoctype) {
+    var fn = _columnFieldname(col);
+    var display = _cellDisplayValue(row, fn);
+    var linkDoctype = typeof col === "object" ? col.link_doctype : null;
+    var linkName = _cellLinkValue(row, fn);
+
+    if (linkDoctype && linkName && linkName !== "—") {
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "frai-doc-link";
+        btn.textContent = display === "—" ? String(linkName) : display;
+        btn.title = linkDoctype + ": " + linkName;
+        btn.addEventListener("click", function () {
+            _pilotNavigate(["Form", linkDoctype, linkName]);
+        });
+        td.appendChild(btn);
+    } else {
+        td.textContent = display;
+    }
+}
+
+function _renderMicroReportCard(container, microReport, reply) {
+    if (!container || !microReport) return null;
+    if (microReport.error && !(microReport.kpis && microReport.kpis.length) &&
+        !(microReport.tables && microReport.tables.length)) {
+        return null;
+    }
+
+    var hasTable = microReport.tables && microReport.tables.length &&
+        microReport.tables.some(function (t) { return t.rows && t.rows.length; });
+    var hasKpis = microReport.kpis && microReport.kpis.length;
+    var hasWarnings = microReport.warnings && microReport.warnings.length;
+
+    var tableSections = (microReport.tables || []).filter(function (t) {
+        return t.rows && t.rows.length;
+    });
+    var sectionCount = tableSections.length;
+
+    var card = document.createElement("div");
+    card.className = "frai-micro-report" + (microReport.error ? " frai-micro-report-error" : "");
+    if (sectionCount > 1) {
+        card.className += " frai-micro-report-multi";
+    }
+
+    var header = document.createElement("div");
+    header.className = "frai-micro-report-header";
+    var titleHtml = "<strong>" + _escapeHtml(microReport.title || "Insight") + "</strong>";
+    if (sectionCount > 1) {
+        var sectionsLabel = (_ui("insight_sections_count") || "{count} sections").replace("{count}", String(sectionCount));
+        titleHtml += '<span class="frai-micro-report-sections-badge">' + _escapeHtml(sectionsLabel) + "</span>";
+    }
+    header.innerHTML = titleHtml;
+    if (microReport.period) {
+        header.innerHTML += '<div class="frai-micro-report-period">' +
+            _escapeHtml(microReport.period) + "</div>";
+    }
+    if (microReport.company) {
+        header.innerHTML += '<div class="frai-micro-report-period">' +
+            _escapeHtml(microReport.company) + "</div>";
+    }
+    card.appendChild(header);
+
+    if (hasWarnings) {
+        var warnBox = document.createElement("div");
+        warnBox.className = "frai-micro-report-warnings";
+        var warnTitle = document.createElement("div");
+        warnTitle.className = "frai-micro-report-warnings-title";
+        warnTitle.textContent = _ui("insight_partial_results") || "Partial results";
+        warnBox.appendChild(warnTitle);
+        var warnList = document.createElement("ul");
+        microReport.warnings.forEach(function (w) {
+            var li = document.createElement("li");
+            var toolLabel = w.tool ? w.tool + ": " : "";
+            li.textContent = toolLabel + (w.error || "Unknown error");
+            warnList.appendChild(li);
+        });
+        warnBox.appendChild(warnList);
+        card.appendChild(warnBox);
+    }
+
+    if (microReport.error) {
+        var err = document.createElement("div");
+        err.className = "frai-micro-report-error-msg";
+        err.textContent = microReport.error;
+        card.appendChild(err);
+    }
+
+    if (hasKpis) {
+        var grid = document.createElement("div");
+        grid.className = "frai-kpi-grid";
+        microReport.kpis.forEach(function (kpi) {
+            var item = document.createElement("div");
+            item.className = "frai-kpi-item";
+            var delta = kpi.delta ? '<span class="frai-kpi-delta">' + _escapeHtml(kpi.delta) + "</span>" : "";
+            item.innerHTML = '<div class="frai-kpi-label">' + _escapeHtml(kpi.label || "") + "</div>" +
+                '<div class="frai-kpi-value">' + _escapeHtml(String(kpi.value || "")) + delta + "</div>";
+            grid.appendChild(item);
+        });
+        card.appendChild(grid);
+    } else if (!hasTable && !microReport.error) {
+        /* no KPIs and no table — header only */
+    }
+
+    if (hasTable) {
+        tableSections.forEach(function (table, idx) {
+            if (idx > 0) {
+                var divider = document.createElement("hr");
+                divider.className = "frai-micro-report-section-divider";
+                card.appendChild(divider);
+            }
+
+            var wrap = document.createElement("div");
+            wrap.className = "frai-micro-report-table-wrap";
+
+            var toolbar = document.createElement("div");
+            toolbar.className = "frai-micro-report-table-toolbar";
+
+            var titleEl = document.createElement("div");
+            titleEl.className = "frai-micro-report-table-title";
+            titleEl.textContent = table.title || microReport.title || table.name || "Results";
+            toolbar.appendChild(titleEl);
+
+            var rowCount = table.row_count || microReport.row_count || table.rows.length;
+            var badge = document.createElement("span");
+            badge.className = "frai-micro-report-row-badge";
+            badge.textContent = rowCount + " row" + (rowCount === 1 ? "" : "s");
+            toolbar.appendChild(badge);
+
+            var copyBtn = document.createElement("button");
+            copyBtn.type = "button";
+            copyBtn.className = "frai-micro-report-copy-btn";
+            copyBtn.title = _ui("insight_copy_table") || "Copy table";
+            copyBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+            copyBtn.addEventListener("click", function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                _copyMicroReportTable(table);
+            });
+            toolbar.appendChild(copyBtn);
+            wrap.appendChild(toolbar);
+
+            var scroll = document.createElement("div");
+            scroll.className = "frai-micro-report-table-scroll";
+
+            var tableEl = document.createElement("table");
+            tableEl.className = "frai-micro-report-table";
+            var cols = table.columns || [];
+            var isLegacyArray = Array.isArray(table.rows[0]);
+
+            if (cols.length) {
+                var thead = document.createElement("thead");
+                var headRow = document.createElement("tr");
+                cols.forEach(function (col) {
+                    var th = document.createElement("th");
+                    th.textContent = _columnLabel(col);
+                    if (_isNumericColumn(col)) th.className = "frai-cell-num";
+                    headRow.appendChild(th);
+                });
+                thead.appendChild(headRow);
+                tableEl.appendChild(thead);
+            }
+
+            var tbody = document.createElement("tbody");
+            var tableDoctype = table.doctype || "";
+
+            table.rows.forEach(function (row) {
+                var tr = document.createElement("tr");
+                if (isLegacyArray) {
+                    (row || []).forEach(function (cell) {
+                        var td = document.createElement("td");
+                        td.textContent = cell == null || cell === "" ? "—" : String(cell);
+                        tr.appendChild(td);
+                    });
+                } else {
+                    cols.forEach(function (col) {
+                        var td = document.createElement("td");
+                        if (_isNumericColumn(col)) td.className = "frai-cell-num";
+                        _renderTableCell(td, row, col, tableDoctype);
+                        tr.appendChild(td);
+                    });
+                }
+                tbody.appendChild(tr);
+            });
+            tableEl.appendChild(tbody);
+            scroll.appendChild(tableEl);
+            wrap.appendChild(scroll);
+            card.appendChild(wrap);
+        });
+    }
+
+    if (FRAI.config && FRAI.config.insight_enable_save_snapshot !== false) {
+        var saveBtn = document.createElement("button");
+        saveBtn.type = "button";
+        saveBtn.className = "frai-micro-report-save";
+        saveBtn.textContent = _ui("insight_save_snapshot") || "Save snapshot";
+        saveBtn.addEventListener("click", function () {
+            frappe.call({
+                method: "frappe_pilot.api.insight.save_snapshot",
+                args: {
+                    micro_report: microReport,
+                    reply: reply || "",
+                    title: microReport.title || "",
+                },
+                callback: function (r) {
+                    if (r.message && r.message.name) {
+                        frappe.show_alert({ message: "Snapshot saved", indicator: "green" });
+                        if (r.message.route) {
+                            var open = document.createElement("a");
+                            open.href = r.message.route;
+                            open.className = "frai-micro-report-link";
+                            open.textContent = "View snapshot";
+                            open.style.marginLeft = "8px";
+                            card.appendChild(open);
+                        }
+                    }
+                },
+            });
+        });
+        card.appendChild(saveBtn);
+    }
+
+    container.appendChild(card);
+    return card;
+}
+
+function _addInsightContextHint(evidence) {
+    if (FRAI.config && FRAI.config.insight_show_evidence === false) return;
+    if (!evidence) return;
+    var msgs = document.getElementById("frai-messages-insight");
+    if (!msgs) return;
+    var parts = [];
+    if (evidence.preset_id) parts.push("Preset: " + evidence.preset_id);
+    if (evidence.reports_used && evidence.reports_used.length) {
+        parts.push("Reports: " + evidence.reports_used.join(", "));
+    } else if (evidence.tools_used && evidence.tools_used.length) {
+        parts.push("Tools: " + evidence.tools_used.join(", "));
+    }
+    if (!parts.length) return;
+    var hint = document.createElement("div");
+    hint.className = "frai-context-hint";
+    hint.textContent = parts.join(" · ");
+    var typing = document.getElementById("frai-typing-insight");
+    if (typing && msgs.contains(typing)) msgs.insertBefore(hint, typing);
+    else msgs.appendChild(hint);
+}
+
+function sendInsightMessage() {
+    var input = document.getElementById("frai-input");
+    if (!input) return;
+
+    var text = input.value.trim();
+    var presetId = FRAI.pendingPresetId || "";
+    if (!text && !presetId) return;
+
+    input.value = "";
+    input.style.height = "auto";
+    FRAI.pendingPresetId = "";
+
+    var displayText = text || presetId;
+    _addInsightBubble(displayText, "frai-user");
+    _showTyping();
+    FRAI.sending = true;
+
+    _loadInsightContextFromStorage();
+
+    frappe.call({
+        method: "frappe_pilot.api.insight.chat",
+        args: {
+            message: text,
+            reply_locale: FRAI.replyLocale || "en",
+            context: JSON.stringify(FRAI.insightContext || {}),
+            preset_id: presetId,
+        },
+        callback: function (r) {
+            FRAI.sending = false;
+            _hideTyping();
+            if (r && r.message) {
+                if (r.message.needs_api_setup) {
+                    _showApiSetupState();
+                    return;
+                }
+                if (r.message.chip_meta) _applyChipMeta(r.message.chip_meta);
+                if (r.message.reply_locale) FRAI.replyLocale = r.message.reply_locale;
+                if (r.message.kpi_snapshot_id) {
+                    /* cache hit indicator — Phase 2 */
+                }
+                var bubble = _addInsightBubble(r.message.reply || "—", "frai-agent", r.message.chips);
+                if (r.message.micro_report && bubble) {
+                    FRAI.lastMicroReport = r.message.micro_report;
+                    _renderMicroReportCard(bubble, r.message.micro_report, r.message.reply);
+                }
+                if (r.message.llm_exhausted && bubble) {
+                    _renderLlmFailoverChips(bubble, r.message.llm_exhausted);
+                }
+                _addInsightContextHint(r.message.evidence);
+            } else {
+                _addInsightBubble("No response received.", "frai-error");
+            }
+        },
+        error: function (err) {
+            FRAI.sending = false;
+            _hideTyping();
+            _addInsightBubble("Could not reach the server.", "frai-error");
+            console.error("[Frappe Pilot] insight error:", err);
+        },
     });
 }
 
@@ -3092,7 +4841,7 @@ function _handleNavigationAction(container, action) {
 }
 
 function _addAdvisorBubble(html, chips, navLinks, navigationAction) {
-    _addBubble(html, "frai-agent", chips, navLinks, navigationAction);
+    return _addBubble(html, "frai-agent", chips, navLinks, navigationAction);
 }
 
 
@@ -3101,6 +4850,7 @@ function _addAdvisorBubble(html, chips, navLinks, navigationAction) {
 // ════════════════════════════════════════════════════════════════
 function _getTypingId() {
     if (FRAI.activeTab === "build") return "frai-typing-coding";
+    if (FRAI.activeTab === "insight") return "frai-typing-insight";
     if (FRAI.activeTab === "advisor") return "frai-typing-advisor";
     return "frai-typing";
 }
@@ -3109,6 +4859,10 @@ function _getTypingLabels() {
     if (FRAI.activeTab === "build") {
         var buildLabel = _ui("typing_build");
         return [buildLabel].concat(CODING_TYPING_LABELS.slice(1));
+    }
+    if (FRAI.activeTab === "insight") {
+        var insightLabel = _ui("typing_insight");
+        return [insightLabel].concat(ADVISOR_TYPING_LABELS.slice(1));
     }
     if (FRAI.activeTab === "advisor") {
         var advisorLabel = _ui("typing_advisor");
@@ -3121,6 +4875,9 @@ function _getActiveMsgs() {
     if (FRAI.activeTab === "build") {
         if (FRAI.activeBuildSubtab === "changes") return null;
         return document.getElementById("frai-messages-coding");
+    }
+    if (FRAI.activeTab === "insight") {
+        return document.getElementById("frai-messages-insight");
     }
     if (FRAI.activeTab === "advisor") {
         return document.getElementById("frai-messages-advisor");
@@ -3165,6 +4922,7 @@ function _addBubble(html, cssClass, chips, navLinks, navigationAction) {
     }
 
     _scrollBottom();
+    return bubble;
 }
 
 function _removeAllChips() {
@@ -3323,7 +5081,10 @@ function sendCodingMessage() {
                 _showPreviewCard(replyText, data.preview);
                 FRAI.codingHistory.push({ role: "assistant", content: data.preview.summary || replyText });
             } else {
-                _addBubble(replyText || "—", "frai-agent");
+                var bubble = _addBubble(replyText || "—", "frai-agent");
+                if (data.llm_exhausted && bubble) {
+                    _renderLlmFailoverChips(bubble, data.llm_exhausted);
+                }
                 FRAI.codingHistory.push({ role: "assistant", content: replyText });
             }
         },
@@ -3332,7 +5093,7 @@ function sendCodingMessage() {
             _hideTyping();
             FRAI.codingHistory.pop(); // remove the optimistic user message
             _addBubble(
-                "Server error. Check that <code>groq_api_key</code> is set in site_config.json.",
+                "Server error. Check Pilot Settings > API Keys or site_config.json.",
                 "frai-error"
             );
             console.error("[Frappe Pilot] build error:", err);

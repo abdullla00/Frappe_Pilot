@@ -5,6 +5,9 @@ app_description = "AI Assistant for ERPNext"
 app_email = "as0742004@gmail.com"
 app_license = "mit"
 
+app_logo_url = "/assets/frappe_pilot/images/frappe-pilot-logo.svg"
+app_home = "/desk/pilot"
+
 # Apps
 # ------------------
 
@@ -84,13 +87,16 @@ doctype_js = {"Pilot Settings": "public/js/pilot_settings.js"}
 
 # before_install = "frappe_pilot.install.before_install"
 after_install = "frappe_pilot.install.after_install"
-after_migrate = ["frappe_pilot.install.after_migrate"]
+after_migrate = [
+	"frappe_pilot.install.after_migrate",
+	"frappe_pilot.setup.desk.after_migrate",
+]
 
 # Uninstallation
 # ------------
 
-# before_uninstall = "frappe_pilot.uninstall.before_uninstall"
-# after_uninstall = "frappe_pilot.uninstall.after_uninstall"
+before_uninstall = "frappe_pilot.uninstall.before_uninstall"
+after_uninstall = "frappe_pilot.uninstall.after_uninstall"
 
 # Integration Setup
 # ------------------
@@ -242,4 +248,73 @@ after_migrate = ["frappe_pilot.install.after_migrate"]
 # default_log_clearing_doctypes = {
 # 	"Logging DocType Name": 30  # days to retain logs
 # }
+
+add_to_apps_screen = [
+	{
+		"name": "frappe_pilot",
+		"logo": "/assets/frappe_pilot/images/frappe-pilot-logo.svg",
+		"title": "Frappe Pilot",
+		"route": "/desk/pilot",
+		"has_permission": "frappe_pilot.api.config.has_app_permission",
+	}
+]
+
+website_route_rules = [
+	{"from_route": "/pilot/stream/ping", "to_route": "pilot_stream/ping"},
+	{"from_route": "/pilot/stream/<path:agent_name>", "to_route": "pilot_stream"},
+	{"from_route": "/pilot/stream", "to_route": "pilot_stream"},
+	{"from_route": "/pilot/trigger/webhook/<slug>", "to_route": "pilot_trigger_webhook"},
+	{"from_route": "/pilot/<path:app_path>", "to_route": "pilot"},
+]
+
+page_renderer = [
+	"frappe_pilot.ai.agent_stream_renderer.AgentStreamRenderer",
+]
+
+doc_events = {
+	"*": {
+		"after_insert": "frappe_pilot.ai.agent_hooks.run_hooked_agents",
+		"on_update": "frappe_pilot.ai.agent_hooks.run_hooked_agents",
+		"on_submit": "frappe_pilot.ai.agent_hooks.run_hooked_agents",
+		"on_cancel": "frappe_pilot.ai.agent_hooks.run_hooked_agents",
+		"on_trash": "frappe_pilot.ai.agent_hooks.run_hooked_agents",
+	},
+	"Pilot Agent Trigger": {
+		"after_insert": "frappe_pilot.ai.agent_hooks.clear_doc_event_agents_cache",
+		"on_update": "frappe_pilot.ai.agent_hooks.clear_doc_event_agents_cache",
+		"on_trash": "frappe_pilot.ai.agent_hooks.clear_doc_event_agents_cache",
+	},
+	"Pilot Knowledge Source": {
+		"after_insert": "frappe_pilot.ai.knowledge.hooks.on_knowledge_source_created",
+		"on_update": "frappe_pilot.ai.knowledge.hooks.on_knowledge_source_updated",
+		"on_trash": "frappe_pilot.ai.knowledge.hooks.on_knowledge_source_deleted",
+	},
+	"Pilot Knowledge Input": {
+		"after_insert": "frappe_pilot.ai.knowledge.hooks.on_knowledge_input_saved",
+		"on_update": "frappe_pilot.ai.knowledge.hooks.on_knowledge_input_saved",
+		"on_trash": "frappe_pilot.ai.knowledge.hooks.on_knowledge_input_deleted",
+	},
+}
+
+scheduler_events = {
+	"all": [
+		"frappe_pilot.ai.agent_scheduler.run_scheduled_agents",
+	],
+	"daily": [
+		"frappe_pilot.ai.knowledge.maintenance.cleanup_orphaned_files",
+		"frappe_pilot.ai.knowledge.maintenance.optimize_indexes",
+		"frappe_pilot.tasks.insight_digest.run_daily_insight_digest",
+	],
+	"hourly": [
+		"frappe_pilot.ai.mcp_client.auto_sync_mcp_server_tools",
+	],
+}
+
+after_app_install = [
+	"frappe_pilot.ai.app_seeding.seeder.on_app_installed",
+]
+
+pilot_tools = []
+pilot_insight_modules = []
+pilot_insight_tools = []
 

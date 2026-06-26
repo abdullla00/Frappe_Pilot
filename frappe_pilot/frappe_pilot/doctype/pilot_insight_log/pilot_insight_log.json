@@ -1,0 +1,155 @@
+{
+ "actions": [],
+ "autoname": "hash",
+ "creation": "2026-06-17 00:00:00",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "user",
+  "status",
+  "preset_id",
+  "column_break_1",
+  "message_preview",
+  "section_break_metrics",
+  "provider",
+  "model",
+  "prompt_tokens",
+  "completion_tokens",
+  "duration_ms",
+  "section_break_data",
+  "reports_used",
+  "tools_used",
+  "filters_applied",
+  "sub_queries_json",
+  "sql_query",
+  "error_message"
+ ],
+ "fields": [
+  {
+   "fieldname": "user",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "User",
+   "options": "User",
+   "reqd": 1
+  },
+  {
+   "default": "Success",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Status",
+   "options": "Success\nPartial\nError"
+  },
+  {
+   "fieldname": "preset_id",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Preset ID"
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "message_preview",
+   "fieldtype": "Small Text",
+   "label": "Message Preview"
+  },
+  {
+   "fieldname": "section_break_metrics",
+   "fieldtype": "Section Break",
+   "label": "Metrics"
+  },
+  {
+   "fieldname": "provider",
+   "fieldtype": "Data",
+   "label": "Provider"
+  },
+  {
+   "fieldname": "model",
+   "fieldtype": "Data",
+   "label": "Model"
+  },
+  {
+   "fieldname": "prompt_tokens",
+   "fieldtype": "Int",
+   "label": "Prompt Tokens"
+  },
+  {
+   "fieldname": "completion_tokens",
+   "fieldtype": "Int",
+   "label": "Completion Tokens"
+  },
+  {
+   "fieldname": "duration_ms",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Duration (ms)"
+  },
+  {
+   "fieldname": "section_break_data",
+   "fieldtype": "Section Break",
+   "label": "Data"
+  },
+  {
+   "fieldname": "reports_used",
+   "fieldtype": "JSON",
+   "label": "Reports Used"
+  },
+  {
+   "fieldname": "tools_used",
+   "fieldtype": "JSON",
+   "label": "Tools Used"
+  },
+  {
+   "fieldname": "filters_applied",
+   "fieldtype": "JSON",
+   "label": "Filters Applied"
+  },
+  {
+   "fieldname": "sub_queries_json",
+   "fieldtype": "JSON",
+   "label": "Sub Queries"
+  },
+  {
+   "fieldname": "sql_query",
+   "fieldtype": "Small Text",
+   "label": "SQL Query"
+  },
+  {
+   "fieldname": "error_message",
+   "fieldtype": "Small Text",
+   "label": "Error Message"
+  }
+ ],
+ "links": [],
+ "modified": "2026-06-17 00:00:00",
+ "modified_by": "Administrator",
+ "module": "Frappe Pilot",
+ "name": "Pilot Insight Log",
+ "naming_rule": "Random",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "read": 1,
+   "role": "All"
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

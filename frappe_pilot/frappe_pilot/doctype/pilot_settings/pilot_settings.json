@@ -19,16 +19,12 @@
   "auto_navigate",
   "close_sidebar_on_navigate",
   "api_keys_tab",
-  "llm_provider",
+  "embed_auth_section",
+  "embed_api_keys",
+  "llm_failover_mode",
   "api_key_status",
-  "column_break_api",
-  "section_break_groq",
-  "groq_api_key",
-  "groq_api_key_backup",
-  "section_break_openai",
-  "openai_api_key",
-  "section_break_gemini",
-  "gemini_api_key",
+  "llm_providers_help_html",
+  "llm_providers",
   "api_setup_help",
   "analyze_tab",
   "analyze_enabled",
@@ -41,6 +37,11 @@
   "diagnose_temperature",
   "context_char_budget",
   "enable_document_checks",
+  "advisor_brief_replies",
+  "advisor_show_context_bar",
+  "advisor_group_chips",
+  "advisor_followup_chips",
+  "advisor_persist_chat_on_route",
   "section_break_analyze_limits",
   "max_linked_docs",
   "max_linked_fields",
@@ -49,6 +50,28 @@
   "max_report_rows",
   "max_timeline_items",
   "max_tool_json_chars",
+  "insight_settings_tab",
+  "insight_enabled",
+  "insight_model",
+  "insight_max_passes",
+  "insight_max_tokens",
+  "insight_max_tokens_final",
+  "column_break_insight",
+  "insight_temperature",
+  "insight_max_report_rows",
+  "insight_max_list_rows",
+  "insight_max_tool_json_chars",
+  "insight_max_tools_per_turn",
+  "insight_max_tables_per_card",
+  "section_break_insight_modules",
+  "insight_disallowed_modules",
+  "insight_disallowed_doctypes",
+  "insight_enable_readonly_sql",
+  "insight_followup_context",
+  "insight_show_evidence",
+  "insight_enable_save_snapshot",
+  "insight_enable_logging",
+  "insight_kpi_cache_ttl",
   "build_tab",
   "build_enabled",
   "build_model",
@@ -58,11 +81,13 @@
   "build_temperature",
   "build_temperature_fallback",
   "preview_expiry_minutes",
-  "build_allowed_roles",
   "advanced_tab",
   "custom_analyze_prompt",
   "disabled_analyze_tools",
-  "debug_log_tool_calls"
+  "disabled_insight_tools",
+  "debug_log_tool_calls",
+  "insight_link_insights_app",
+  "insight_enable_daily_digest"
  ],
  "fields": [
   {
@@ -81,7 +106,7 @@
    "fieldname": "default_tab",
    "fieldtype": "Select",
    "label": "Default Tab",
-   "options": "Advisor\nBuild"
+   "options": "Advisor\nInsight\nBuild"
   },
   {
    "default": "Right",
@@ -102,7 +127,7 @@
    "fieldtype": "Column Break"
   },
   {
-   "description": "Leave empty to allow all desk users.",
+   "description": "Leave empty to allow all desk users (Advisor). Use tab checkboxes per role for Advisor, Build, and platform tabs.",
    "fieldname": "allowed_roles",
    "fieldtype": "Table",
    "label": "Allowed Roles",
@@ -159,11 +184,24 @@
    "label": "API Keys"
   },
   {
-   "default": "Groq",
-   "fieldname": "llm_provider",
+   "fieldname": "embed_auth_section",
+   "fieldtype": "Section Break",
+   "label": "Embed Authentication"
+  },
+  {
+   "description": "API keys for embedded Pilot widgets and external clients.",
+   "fieldname": "embed_api_keys",
+   "fieldtype": "Table",
+   "label": "Embed API Keys",
+   "options": "Pilot API Key"
+  },
+  {
+   "default": "Both",
+   "description": "Manual: use priority-1 row only. Auto: try rows by priority on rate limit. Both: auto chain, then show next-row suggestions if all fail.",
+   "fieldname": "llm_failover_mode",
    "fieldtype": "Select",
-   "label": "LLM Provider",
-   "options": "Groq\nOpenAI\nGemini"
+   "label": "LLM Failover Mode",
+   "options": "Manual\nAuto\nBoth"
   },
   {
    "fieldname": "api_key_status",
@@ -171,49 +209,23 @@
    "label": "API Key Status"
   },
   {
-   "fieldname": "column_break_api",
-   "fieldtype": "Column Break"
+   "fieldname": "llm_providers_help_html",
+   "fieldtype": "HTML",
+   "label": "LLM Providers Help",
+   "options": "<p class=\"text-muted small\">Add one row per API key. Lower <strong>Priority</strong> is tried first. Link to <strong>LLM Provider</strong> catalog. Multiple rows can use the same provider (e.g. two Groq orgs). Empty password falls back to site_config keys on the provider record.</p>"
   },
   {
-   "fieldname": "section_break_groq",
-   "fieldtype": "Section Break",
-   "label": "Groq"
-  },
-  {
-   "fieldname": "groq_api_key",
-   "fieldtype": "Password",
-   "label": "Groq API Key"
-  },
-  {
-   "fieldname": "groq_api_key_backup",
-   "fieldtype": "Password",
-   "label": "Groq Backup API Key"
-  },
-  {
-   "fieldname": "section_break_openai",
-   "fieldtype": "Section Break",
-   "label": "OpenAI"
-  },
-  {
-   "fieldname": "openai_api_key",
-   "fieldtype": "Password",
-   "label": "OpenAI API Key"
-  },
-  {
-   "fieldname": "section_break_gemini",
-   "fieldtype": "Section Break",
-   "label": "Gemini"
-  },
-  {
-   "fieldname": "gemini_api_key",
-   "fieldtype": "Password",
-   "label": "Gemini API Key"
+   "bold": 1,
+   "fieldname": "llm_providers",
+   "fieldtype": "Table",
+   "label": "LLM Providers",
+   "options": "Pilot LLM Provider"
   },
   {
    "fieldname": "api_setup_help",
    "fieldtype": "HTML",
    "label": "Setup Help",
-   "options": "<p>Get API keys from <a href=\"https://console.groq.com\" target=\"_blank\">Groq Console</a>, <a href=\"https://platform.openai.com\" target=\"_blank\">OpenAI Platform</a>, or <a href=\"https://aistudio.google.com\" target=\"_blank\">Google AI Studio</a>. Keys in site_config.json are used as fallback.</p>"
+   "options": "<p>Get API keys from <a href=\"https://console.groq.com\" target=\"_blank\">Groq Console</a>, <a href=\"https://platform.openai.com\" target=\"_blank\">OpenAI Platform</a>, <a href=\"https://aistudio.google.com\" target=\"_blank\">Google AI Studio</a>, or <a href=\"https://admin.mistral.ai/organization/api-keys\" target=\"_blank\">Mistral AI</a>. Manage provider catalog under <strong><a href=\"/desk/llm-provider\">LLM Provider</a></strong> list.</p>"
   },
   {
    "fieldname": "analyze_tab",
@@ -279,6 +291,36 @@
    "label": "Enable Document Checks"
   },
   {
+   "default": "1",
+   "fieldname": "advisor_brief_replies",
+   "fieldtype": "Check",
+   "label": "Advisor Brief Replies"
+  },
+  {
+   "default": "1",
+   "fieldname": "advisor_show_context_bar",
+   "fieldtype": "Check",
+   "label": "Advisor Context Bar"
+  },
+  {
+   "default": "1",
+   "fieldname": "advisor_group_chips",
+   "fieldtype": "Check",
+   "label": "Advisor Chip Groups"
+  },
+  {
+   "default": "1",
+   "fieldname": "advisor_followup_chips",
+   "fieldtype": "Check",
+   "label": "Advisor Follow-up Chips"
+  },
+  {
+   "default": "0",
+   "fieldname": "advisor_persist_chat_on_route",
+   "fieldtype": "Check",
+   "label": "Persist Advisor Chat Across Forms"
+  },
+  {
    "fieldname": "section_break_analyze_limits",
    "fieldtype": "Section Break",
    "label": "Tool Limits"
@@ -324,6 +366,151 @@
    "fieldname": "max_tool_json_chars",
    "fieldtype": "Int",
    "label": "Max Tool JSON Characters"
+  },
+  {
+   "fieldname": "insight_settings_tab",
+   "fieldtype": "Tab Break",
+   "label": "Insight"
+  },
+  {
+   "default": "0",
+   "fieldname": "insight_enabled",
+   "fieldtype": "Check",
+   "label": "Enable Insight Tab"
+  },
+  {
+   "default": "llama-3.3-70b-versatile",
+   "fieldname": "insight_model",
+   "fieldtype": "Data",
+   "label": "Insight Model"
+  },
+  {
+   "default": "5",
+   "fieldname": "insight_max_passes",
+   "fieldtype": "Int",
+   "label": "Agent Max Passes"
+  },
+  {
+   "default": "900",
+   "fieldname": "insight_max_tokens",
+   "fieldtype": "Int",
+   "label": "Max Tokens (Tool Turns)"
+  },
+  {
+   "default": "600",
+   "fieldname": "insight_max_tokens_final",
+   "fieldtype": "Int",
+   "label": "Max Tokens (Final Reply)"
+  },
+  {
+   "fieldname": "column_break_insight",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0.2",
+   "fieldname": "insight_temperature",
+   "fieldtype": "Float",
+   "label": "Insight Temperature"
+  },
+  {
+   "default": "30",
+   "fieldname": "insight_max_report_rows",
+   "fieldtype": "Int",
+   "label": "Max Report Rows"
+  },
+  {
+   "default": "25",
+   "fieldname": "insight_max_list_rows",
+   "fieldtype": "Int",
+   "label": "Max List Rows"
+  },
+  {
+   "default": "6000",
+   "fieldname": "insight_max_tool_json_chars",
+   "fieldtype": "Int",
+   "label": "Max Tool JSON Characters"
+  },
+  {
+   "default": "3",
+   "fieldname": "insight_max_tools_per_turn",
+   "fieldtype": "Int",
+   "label": "Max Tools Per Turn"
+  },
+  {
+   "default": "4",
+   "fieldname": "insight_max_tables_per_card",
+   "fieldtype": "Int",
+   "label": "Max Tables Per Card"
+  },
+  {
+   "fieldname": "section_break_insight_modules",
+   "fieldtype": "Section Break",
+   "label": "Modules & Limits"
+  },
+  {
+   "description": "Insight is allowed for all modules except these.",
+   "fieldname": "insight_disallowed_modules",
+   "fieldtype": "Table",
+   "label": "Disallowed Modules",
+   "options": "Pilot Insight Disallowed Module"
+  },
+  {
+   "description": "Insight is allowed for any DocType the user can read, except these.",
+   "fieldname": "insight_disallowed_doctypes",
+   "fieldtype": "Table",
+   "label": "Disallowed DocTypes",
+   "options": "Pilot Insight Disallowed DocType"
+  },
+  {
+   "default": "1",
+   "description": "Allow System Managers to use run_readonly_query SQL tool.",
+   "fieldname": "insight_enable_readonly_sql",
+   "fieldtype": "Check",
+   "label": "Enable Read-Only SQL Tool"
+  },
+  {
+   "default": "compact",
+   "fieldname": "insight_followup_context",
+   "fieldtype": "Select",
+   "label": "Follow-up Context Mode",
+   "options": "compact\nevidence_only\noff"
+  },
+  {
+   "default": "1",
+   "fieldname": "insight_show_evidence",
+   "fieldtype": "Check",
+   "label": "Show Evidence Line in Insight"
+  },
+  {
+   "default": "1",
+   "fieldname": "insight_enable_save_snapshot",
+   "fieldtype": "Check",
+   "label": "Enable Save Snapshot"
+  },
+  {
+   "default": "1",
+   "fieldname": "insight_enable_logging",
+   "fieldtype": "Check",
+   "label": "Enable Insight Request Logging"
+  },
+  {
+   "default": "600",
+   "description": "Cache TTL in seconds for repeated Insight report queries (0 = disabled).",
+   "fieldname": "insight_kpi_cache_ttl",
+   "fieldtype": "Int",
+   "label": "Insight KPI Cache TTL (seconds)"
+  },
+  {
+   "default": "0",
+   "fieldname": "insight_link_insights_app",
+   "fieldtype": "Check",
+   "label": "Link to Frappe Insights Workbooks"
+  },
+  {
+   "default": "0",
+   "fieldname": "insight_enable_daily_digest",
+   "fieldtype": "Check",
+   "label": "Enable Daily Insight Digest"
   },
   {
    "fieldname": "build_tab",
@@ -377,13 +564,6 @@
    "label": "Preview Expiry (Minutes)"
   },
   {
-   "description": "Leave empty to restrict Build to System Manager only.",
-   "fieldname": "build_allowed_roles",
-   "fieldtype": "Table",
-   "label": "Build Allowed Roles",
-   "options": "Pilot Allowed Role"
-  },
-  {
    "fieldname": "advanced_tab",
    "fieldtype": "Tab Break",
    "label": "Advanced"
@@ -400,6 +580,12 @@
    "label": "Disabled Analyze Tools"
   },
   {
+   "description": "Comma-separated Insight tool names to disable.",
+   "fieldname": "disabled_insight_tools",
+   "fieldtype": "Small Text",
+   "label": "Disabled Insight Tools"
+  },
+  {
    "default": "0",
    "fieldname": "debug_log_tool_calls",
    "fieldtype": "Check",
@@ -409,7 +595,7 @@
  "icon": "fa fa-magic",
  "issingle": 1,
  "links": [],
- "modified": "2026-06-07 02:48:04.310702",
+ "modified": "2026-06-26 08:23:57.569226",
  "modified_by": "Administrator",
  "module": "Frappe Pilot",
  "name": "Pilot Settings",

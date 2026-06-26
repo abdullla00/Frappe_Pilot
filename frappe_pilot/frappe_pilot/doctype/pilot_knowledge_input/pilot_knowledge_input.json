@@ -1,0 +1,116 @@
+{
+ "actions": [],
+ "creation": "2026-06-26 00:00:00",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "links": [],
+ "modified": "2026-06-26 00:00:00",
+ "modified_by": "Administrator",
+ "module": "Frappe Pilot",
+ "name": "Pilot Knowledge Input",
+ "owner": "Administrator",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "row_format": "Dynamic",
+ "naming_rule": "Random",
+ "track_changes": 1,
+ "field_order": [
+  "knowledge_source",
+  "input_type",
+  "file",
+  "text",
+  "url",
+  "status",
+  "source_hash",
+  "chunks_created",
+  "character_count",
+  "processed_at",
+  "error_message"
+ ],
+ "fields": [
+  {
+   "fieldname": "knowledge_source",
+   "fieldtype": "Link",
+   "label": "Knowledge Source",
+   "options": "Pilot Knowledge Source",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "input_type",
+   "fieldtype": "Select",
+   "label": "Input Type",
+   "options": "File\nText\nURL",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "file",
+   "fieldtype": "Attach",
+   "label": "File",
+   "depends_on": "eval:doc.input_type == 'File'"
+  },
+  {
+   "fieldname": "text",
+   "fieldtype": "Long Text",
+   "label": "Text",
+   "depends_on": "eval:doc.input_type == 'Text'"
+  },
+  {
+   "fieldname": "url",
+   "fieldtype": "Data",
+   "label": "URL",
+   "depends_on": "eval:doc.input_type == 'URL'"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Pending\nProcessing\nIndexed\nError",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "source_hash",
+   "fieldtype": "Data",
+   "label": "Source Hash",
+   "read_only": 1
+  },
+  {
+   "fieldname": "chunks_created",
+   "fieldtype": "Int",
+   "label": "Chunks Created",
+   "default": 0,
+   "read_only": 1
+  },
+  {
+   "fieldname": "character_count",
+   "fieldtype": "Int",
+   "label": "Character Count",
+   "default": 0,
+   "read_only": 1
+  },
+  {
+   "fieldname": "processed_at",
+   "fieldtype": "Datetime",
+   "label": "Processed At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "error_message",
+   "fieldtype": "Small Text",
+   "label": "Error Message",
+   "read_only": 1
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1
+  }
+ ]
+}

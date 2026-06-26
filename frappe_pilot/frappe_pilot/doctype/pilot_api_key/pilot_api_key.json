@@ -1,0 +1,60 @@
+{
+ "actions": [],
+ "creation": "2026-06-26 00:00:00",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "links": [],
+ "modified": "2026-06-26 00:00:00",
+ "modified_by": "Administrator",
+ "module": "Frappe Pilot",
+ "name": "Pilot API Key",
+ "owner": "Administrator",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "row_format": "Dynamic",
+ "istable": 1,
+ "editable_grid": 1,
+ "field_order": [
+  "key_name",
+  "api_key",
+  "enabled",
+  "allowed_origins",
+  "last_used"
+ ],
+ "fields": [
+  {
+   "fieldname": "key_name",
+   "fieldtype": "Data",
+   "label": "Key Name",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "api_key",
+   "fieldtype": "Password",
+   "label": "API Key",
+   "reqd": 1
+  },
+  {
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "Enabled",
+   "default": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "allowed_origins",
+   "fieldtype": "Small Text",
+   "label": "Allowed Origins",
+   "description": "Comma-separated origins for embed auth. Leave blank to allow all."
+  },
+  {
+   "fieldname": "last_used",
+   "fieldtype": "Datetime",
+   "label": "Last Used",
+   "read_only": 1
+  }
+ ],
+ "permissions": []
+}

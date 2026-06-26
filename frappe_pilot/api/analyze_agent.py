@@ -6,16 +6,31 @@ import re
 import frappe
 
 from frappe_pilot.api.analyze_tools import execute_tool, parse_page_context
-from frappe_pilot.api.advisor_prompts import GUIDE_SYSTEM_PROMPT
-from frappe_pilot.utils.llm import chat_completion, get_active_provider, has_api_key, _is_rate_limit, groq_rate_limit_message
+from frappe_pilot.api.advisor_prompts import (
+	ADVISOR_READ_ONLY_RULES,
+	CALCULATION_MODE_RULES,
+	GUIDE_SYSTEM_PROMPT,
+	SUMMARY_MODE_RULES,
+)
+from frappe_pilot.utils.advisor_intent import INTENT_CALCULATION, INTENT_SUMMARY
+from frappe_pilot.utils.llm import (
+	ProviderExhaustedError,
+	chat_completion,
+	has_api_key,
+	has_tool_calling_provider,
+	_is_rate_limit,
+	llm_rate_limit_message,
+)
 from frappe_pilot.utils.settings import get_analyze_config, get_enabled_languages
 
 
 
 def _format_llm_error(exc):
 	exc_str = str(exc)
+	if isinstance(exc, ProviderExhaustedError):
+		return str(exc)
 	if _is_rate_limit(exc):
-		return groq_rate_limit_message(exc)
+		return llm_rate_limit_message(None, exc)
 	return f"Something went wrong calling the LLM: {exc_str}"
 
 
@@ -171,6 +186,36 @@ ANALYZE_TOOLS = [
 			},
 		},
 	},
+	{
+		"type": "function",
+		"function": {
+			"name": "get_domain_calc_context",
+			"description": "Get per-line calculation hints (rate semantics, rental vs stock roles) for the open document",
+			"parameters": {
+				"type": "object",
+				"properties": {
+					"doctype": {"type": "string"},
+					"docname": {"type": "string"},
+					"days": {"type": "integer"},
+				},
+				"required": ["doctype", "docname"],
+			},
+		},
+	},
+	{
+		"type": "function",
+		"function": {
+			"name": "submit_advisor_card",
+			"description": "Submit structured advisor card (calculation, summary, or diagnose) for UI rendering",
+			"parameters": {
+				"type": "object",
+				"properties": {
+					"card": {"type": "object", "description": "Card JSON with type, title, rows, total, etc."},
+				},
+				"required": ["card"],
+			},
+		},
+	},
 ]
 
 BASE_AGENT_RULES = """
@@ -218,13 +263,20 @@ NAVIGATION_RULES = """
 
 DIAGNOSE_MODE_RULES = """
 ## Mode: diagnose
-- Structure your answer with these sections:
-  **Findings** — bullet list of issues found (or "No issues detected")
-  **Evidence** — cite tool results and field values
-  **Likely cause** — one short paragraph
-  **What to verify** — 1-2 concrete checks for the user
-- Max 150 words total.
+- Call run_document_checks first, then get_document if needed.
+- Submit a diagnose advisor_card via submit_advisor_card with type diagnose.
+- Card sections: findings (issues list), evidence (field values checked), verify (user actions).
+- Chat reply: ONE headline sentence only — details go in the card.
+- Max 150 words in chat if no card tool available.
 - Always call run_document_checks when analyzing a saved document.
+"""
+
+LINKED_DOC_RULES = """
+## Linked documents and Order Reference
+- For Job Order, Rental Order, Service Ticket, Delivery Ticket, or Return Ticket questions about
+  linked records, tickets, or references: call get_linked_documents AND inspect order_reference child rows.
+- Questions like "Linked tickets?", "What ST/DT/RT refs?", "Show order references" need live linked data — do not guess.
+- Use nav tokens for referenced document IDs found in tools (st, dt, rt, jo, ro abbreviations in user text map to DocTypes).
 """
 
 
@@ -235,18 +287,24 @@ def _get_active_tools():
 
 
 def _supports_tool_calling():
-	return get_active_provider() in ("Groq", "OpenAI")
+	return has_tool_calling_provider()
 
 
-def _build_system_prompt(seed_context, mode="explain", reply_locale=None):
+def _build_system_prompt(seed_context, mode="explain", reply_locale=None, intent_info=None):
 	from frappe_pilot.utils.i18n import get_llm_language_instruction
 	from frappe_pilot.utils.navigation import get_reply_locale_instruction
 
 	cfg = get_analyze_config()
 	langs = get_enabled_languages()
-	parts = [BASE_AGENT_RULES, GUIDE_SYSTEM_PROMPT.strip(), NAVIGATION_RULES.strip()]
+	intent_info = intent_info or {}
+	intent = intent_info.get("intent")
+	parts = [BASE_AGENT_RULES, ADVISOR_READ_ONLY_RULES.strip(), GUIDE_SYSTEM_PROMPT.strip(), NAVIGATION_RULES.strip(), LINKED_DOC_RULES.strip()]
 	if mode == "diagnose":
 		parts.append(DIAGNOSE_MODE_RULES)
+	elif intent == INTENT_CALCULATION:
+		parts.append(CALCULATION_MODE_RULES)
+	elif intent == INTENT_SUMMARY:
+		parts.append(SUMMARY_MODE_RULES)
 	else:
 		parts.append(EXPLAIN_MODE_RULES)
 	if cfg.get("custom_analyze_prompt"):
@@ -291,11 +349,15 @@ def run_agent(
 	docname="",
 	list_doctype="",
 	route="",
+	intent_info=None,
 ):
 	cfg = get_analyze_config()
 	page_context = parse_page_context(page_context_raw)
 	history = history or []
-	system_prompt = _build_system_prompt(seed_context, mode=mode, reply_locale=reply_locale)
+	intent_info = intent_info or {}
+	system_prompt = _build_system_prompt(
+		seed_context, mode=mode, reply_locale=reply_locale, intent_info=intent_info
+	)
 
 	messages = [{"role": "system", "content": system_prompt}] + list(history)
 	messages.append({"role": "user", "content": message})
@@ -309,6 +371,7 @@ def run_agent(
 
 	tools_used = []
 	checks_run = 0
+	advisor_card = None
 	max_passes = cfg["max_passes"]
 
 	for pass_num in range(max_passes):
@@ -324,13 +387,18 @@ def run_agent(
 					return {
 						"reply": _format_llm_error(fallback_exc),
 						"evidence": {"tools_used": tools_used, "checks_run": checks_run},
+						"advisor_card": advisor_card,
 					}
 			else:
 				frappe.log_error(frappe.get_traceback(), "Analyze Agent Error")
-				return {
+				result = {
 					"reply": _format_llm_error(exc),
 					"evidence": {"tools_used": tools_used, "checks_run": checks_run},
+					"advisor_card": advisor_card,
 				}
+				if isinstance(exc, ProviderExhaustedError) and getattr(exc, "payload", None):
+					result["llm_exhausted"] = exc.payload
+				return result
 
 		msg = response.choices[0].message
 
@@ -339,52 +407,64 @@ def run_agent(
 			return {
 				"reply": reply,
 				"evidence": {"tools_used": tools_used, "checks_run": checks_run},
+				"advisor_card": advisor_card,
 			}
 
-		tool_call = msg.tool_calls[0]
-		tool_name = tool_call.function.name
-		try:
-			tool_args = json.loads(tool_call.function.arguments or "{}")
-		except json.JSONDecodeError:
-			tool_args = {}
+		assistant_tool_calls = []
+		tool_messages = []
+		for tool_call in msg.tool_calls:
+			tool_name = tool_call.function.name
+			try:
+				tool_args = json.loads(tool_call.function.arguments or "{}")
+			except json.JSONDecodeError:
+				tool_args = {}
 
-		if cfg.get("debug_log_tool_calls"):
-			frappe.log_error(
-				json.dumps({"tool": tool_name, "args": tool_args}, default=str),
-				"Pilot Analyze Tool Call",
+			if cfg.get("debug_log_tool_calls"):
+				frappe.log_error(
+					json.dumps({"tool": tool_name, "args": tool_args}, default=str),
+					"Pilot Analyze Tool Call",
+				)
+
+			if tool_name == "get_domain_calc_context" and intent_info.get("days") and not tool_args.get("days"):
+				tool_args["days"] = intent_info.get("days")
+
+			result = execute_tool(
+				tool_name,
+				tool_args,
+				page_context=page_context,
+				default_doctype=doctype,
+				default_docname=docname,
 			)
 
-		result = execute_tool(
-			tool_name,
-			tool_args,
-			page_context=page_context,
-			default_doctype=doctype,
-			default_docname=docname,
-		)
+			tools_used.append(tool_name)
+			if tool_name == "run_document_checks":
+				checks_run = result.get("issue_count", 0) if isinstance(result, dict) else 0
+			if tool_name == "submit_advisor_card" and isinstance(result, dict) and result.get("card"):
+				advisor_card = result.get("card")
 
-		tools_used.append(tool_name)
-		if tool_name == "run_document_checks":
-			checks_run = result.get("issue_count", 0) if isinstance(result, dict) else 0
-
-		messages.append({
-			"role": "assistant",
-			"content": None,
-			"tool_calls": [{
+			assistant_tool_calls.append({
 				"id": tool_call.id,
 				"type": "function",
 				"function": {
 					"name": tool_name,
 					"arguments": tool_call.function.arguments,
 				},
-			}],
-		})
+			})
+			tool_messages.append({
+				"role": "tool",
+				"tool_call_id": tool_call.id,
+				"content": json.dumps(result, default=str),
+			})
+
 		messages.append({
-			"role": "tool",
-			"tool_call_id": tool_call.id,
-			"content": json.dumps(result, default=str),
+			"role": "assistant",
+			"content": None,
+			"tool_calls": assistant_tool_calls,
 		})
+		messages.extend(tool_messages)
 
 	return {
 		"reply": "I reached the maximum number of data lookups. Please ask a more specific question.",
 		"evidence": {"tools_used": tools_used, "checks_run": checks_run},
+		"advisor_card": advisor_card,
 	}

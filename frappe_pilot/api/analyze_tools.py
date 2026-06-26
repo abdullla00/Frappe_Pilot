@@ -415,6 +415,75 @@ def exec_run_document_checks(doctype="", docname=""):
 	return _truncate_result(run_document_checks(doctype, docname))
 
 
+def exec_get_domain_calc_context(doctype="", docname="", days=None):
+	if not doctype or not docname:
+		return {"error": "doctype and docname are required"}
+
+	from frappe_pilot.utils.advisor_profile import get_advisor_profile
+
+	profile = get_advisor_profile(doctype)
+	context = {"doctype": doctype, "docname": docname, "days": days, "lines": [], "notes": []}
+
+	for provider in frappe.get_hooks("advisor_calc_context") or []:
+		try:
+			hook_result = frappe.get_attr(provider)(
+				doctype=doctype,
+				docname=docname,
+				days=days,
+				profile=profile,
+			)
+			if isinstance(hook_result, dict):
+				for line in hook_result.get("lines") or []:
+					context["lines"].append(line)
+				context["notes"].extend(hook_result.get("notes") or [])
+				if hook_result.get("currency"):
+					context["currency"] = hook_result.get("currency")
+				suggested = hook_result.get("suggested_card") or hook_result.get("card")
+				if suggested:
+					context["suggested_card"] = suggested
+		except Exception:
+			frappe.log_error(frappe.get_traceback(), f"Advisor calc hook failed: {provider}")
+
+	if context.get("lines") or context.get("suggested_card"):
+		frappe.local.advisor_calc_evidence = {
+			"lines": context.get("lines") or [],
+			"days": days,
+			"currency": context.get("currency"),
+		}
+
+	if not context["lines"] and not context.get("suggested_card"):
+		summary = get_doc_summary(doctype, docname)
+		if summary.get("child_tables"):
+			items = summary.get("child_tables", {}).get("items") or []
+			for row in items[:30]:
+				context["lines"].append({
+					"item_code": row.get("item_code") or row.get("item_name"),
+					"role": "unknown",
+					"rate": row.get("rate"),
+					"qty": row.get("qty"),
+				})
+
+	return _truncate_result(context)
+
+
+def exec_submit_advisor_card(card=None):
+	from frappe_pilot.utils.advisor_card import normalize_advisor_card, validate_advisor_card
+
+	if not card or not isinstance(card, dict):
+		return {"error": "card object is required", "accepted": False}
+
+	evidence = getattr(frappe.local, "advisor_calc_evidence", None)
+	validated = validate_advisor_card(card, evidence=evidence)
+	if validated.get("error"):
+		return {"error": validated.get("error"), "accepted": False}
+
+	normalized = normalize_advisor_card(validated, evidence=evidence)
+	if normalized.get("error"):
+		return {"error": normalized.get("error"), "accepted": False}
+
+	return {"accepted": True, "card": normalized, "warnings": normalized.get("warnings") or []}
+
+
 TOOL_HANDLERS = {
 	"get_document": exec_get_document,
 	"get_linked_documents": exec_get_linked_documents,
@@ -426,6 +495,8 @@ TOOL_HANDLERS = {
 	"get_list_count": exec_get_list_count,
 	"run_report_sample": exec_run_report_sample,
 	"run_document_checks": exec_run_document_checks,
+	"get_domain_calc_context": exec_get_domain_calc_context,
+	"submit_advisor_card": exec_submit_advisor_card,
 }
 
 

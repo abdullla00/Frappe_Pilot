@@ -9,6 +9,8 @@ readme = "README.md"
 dynamic = ["version"]
 dependencies = [
     # "frappe~=15.0.0" # Installed and managed by bench.
+    "litellm>=1.0.0,!=1.82.7,!=1.82.8",
+    "openai-agents",
 ]
 
 [build-system]

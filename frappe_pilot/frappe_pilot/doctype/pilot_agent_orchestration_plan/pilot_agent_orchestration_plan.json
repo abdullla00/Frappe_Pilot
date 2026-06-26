@@ -1,0 +1,53 @@
+{
+ "actions": [],
+ "creation": "2026-06-26 00:00:00",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "links": [],
+ "modified": "2026-06-26 00:00:00",
+ "modified_by": "Administrator",
+ "module": "Frappe Pilot",
+ "name": "Pilot Agent Orchestration Plan",
+ "owner": "Administrator",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "row_format": "Dynamic",
+ "istable": 1,
+ "editable_grid": 1,
+ "allow_rename": 1,
+ "field_order": [
+  "step_index",
+  "status",
+  "instruction",
+  "output_ref"
+ ],
+ "fields": [
+  {
+   "fieldname": "step_index",
+   "fieldtype": "Int",
+   "label": "Step Index",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "pending\nin_progress\ndone\nfailed",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "instruction",
+   "fieldtype": "Long Text",
+   "label": "Instruction",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "output_ref",
+   "fieldtype": "Long Text",
+   "label": "Output",
+   "in_list_view": 1
+  }
+ ],
+ "permissions": []
+}

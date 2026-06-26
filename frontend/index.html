@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="theme-color" content="#005931" />
+    <link rel="icon" href="/assets/frappe_pilot/images/favicon.svg" type="image/svg+xml" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Frappe Pilot</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script>
+      window.csrf_token = "{{ csrf_token }}";
+      if (!window.frappe) window.frappe = {};
+      window.app_name = "frappe_pilot";
+      frappe.boot = JSON.parse({{ boot }});
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

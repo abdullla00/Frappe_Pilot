@@ -1,0 +1,21 @@
+{
+ "aggregate_function_based_on": "",
+ "color": "#29CD42",
+ "creation": "2026-06-26 00:00:00",
+ "docstatus": 0,
+ "doctype": "Number Card",
+ "document_type": "Pilot Agent Run",
+ "dynamic_filters_json": "[]",
+ "filters_json": "[[\"Pilot Agent Run\",\"status\",\"=\",\"Success\",false]]",
+ "function": "Count",
+ "is_public": 1,
+ "label": "Success Rate",
+ "modified": "2026-06-26 00:00:00",
+ "modified_by": "Administrator",
+ "module": "Frappe Pilot",
+ "name": "Success Rate",
+ "owner": "Administrator",
+ "show_percentage_stats": 1,
+ "stats_time_interval": "Daily",
+ "type": "Document Type"
+}

@@ -1,0 +1,207 @@
+{
+ "app": "frappe_pilot",
+ "charts": [],
+ "content": "[{\"id\":\"pilotHero\",\"type\":\"custom_block\",\"data\":{\"custom_block_name\":\"Frappe Pilot Hero\",\"col\":12}},{\"id\":\"pilotSp1\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"pilotHdLive\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Live Metrics</b></span>\",\"col\":12}},{\"id\":\"pilotNC1\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Total Agent Runs\",\"col\":4}},{\"id\":\"pilotNC2\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Success Rate\",\"col\":4}},{\"id\":\"pilotNC3\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Total Cost\",\"col\":4}},{\"id\":\"pilotSp2\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"pilotHdQA\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Quick Actions</b></span>\",\"col\":12}},{\"id\":\"pilotShConsole\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Open Pilot Console\",\"col\":4}},{\"id\":\"pilotShAgent\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Pilot Agent\",\"col\":3}},{\"id\":\"pilotShChat\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Pilot Agent Conversation\",\"col\":4}},{\"id\":\"pilotShMcp\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Pilot MCP Server\",\"col\":4}},{\"id\":\"pilotShSettings\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Pilot Settings\",\"col\":4}},{\"id\":\"pilotSp3\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"pilotHdCore\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Core Areas</b></span>\",\"col\":12}},{\"id\":\"pilotC1\",\"type\":\"card\",\"data\":{\"card_name\":\"Agents & Chat\",\"col\":4}},{\"id\":\"pilotC2\",\"type\":\"card\",\"data\":{\"card_name\":\"Knowledge & Flows\",\"col\":4}},{\"id\":\"pilotC3\",\"type\":\"card\",\"data\":{\"card_name\":\"Observability\",\"col\":4}}]",
+ "creation": "2026-06-26 00:00:00",
+ "custom_blocks": [
+  {
+   "custom_block_name": "Frappe Pilot Hero",
+   "label": "Frappe Pilot Hero"
+  }
+ ],
+ "docstatus": 0,
+ "doctype": "Workspace",
+ "for_user": "",
+ "hide_custom": 0,
+ "icon": "bot",
+ "idx": 0,
+ "indicator_color": "green",
+ "is_hidden": 0,
+ "label": "Pilot",
+ "links": [
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Agents & Chat",
+   "link_count": 3,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Pilot Agent",
+   "link_count": 0,
+   "link_to": "Pilot Agent",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Pilot Agent Conversation",
+   "link_count": 0,
+   "link_to": "Pilot Agent Conversation",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Pilot Agent Run",
+   "link_count": 0,
+   "link_to": "Pilot Agent Run",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Knowledge & Flows",
+   "link_count": 3,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Pilot Knowledge Source",
+   "link_count": 0,
+   "link_to": "Pilot Knowledge Source",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Pilot Flow Definition",
+   "link_count": 0,
+   "link_to": "Pilot Flow Definition",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Pilot MCP Server",
+   "link_count": 0,
+   "link_to": "Pilot MCP Server",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Observability",
+   "link_count": 3,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Pilot Agent Run Feedback",
+   "link_count": 0,
+   "link_to": "Pilot Agent Run Feedback",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Pilot LLM Efficiency",
+   "link_count": 0,
+   "link_to": "Pilot LLM Efficiency",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Pilot Settings",
+   "link_count": 0,
+   "link_to": "Pilot Settings",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  }
+ ],
+ "modified": "2026-06-26 10:40:31.197055",
+ "modified_by": "Administrator",
+ "module": "Frappe Pilot",
+ "name": "Pilot",
+ "number_cards": [
+  {
+   "label": "Total Agent Runs",
+   "number_card_name": "Total Agent Runs"
+  },
+  {
+   "label": "Success Rate",
+   "number_card_name": "Success Rate"
+  },
+  {
+   "label": "Total Cost",
+   "number_card_name": "Total Cost"
+  }
+ ],
+ "owner": "Administrator",
+ "public": 1,
+ "quick_lists": [],
+ "roles": [],
+ "sequence_id": 40.0,
+ "shortcuts": [
+  {
+   "color": "Green",
+   "doc_view": "",
+   "icon": "external-link",
+   "label": "Open Pilot Console",
+   "type": "URL",
+   "url": "/pilot"
+  },
+  {
+   "color": "Green",
+   "doc_view": "List",
+   "icon": "bot",
+   "label": "Pilot Agent",
+   "link_to": "Pilot Agent",
+   "type": "DocType"
+  },
+  {
+   "color": "Green",
+   "doc_view": "List",
+   "icon": "message-circle",
+   "label": "Pilot Agent Conversation",
+   "link_to": "Pilot Agent Conversation",
+   "type": "DocType"
+  },
+  {
+   "color": "Green",
+   "doc_view": "List",
+   "icon": "server",
+   "label": "Pilot MCP Server",
+   "link_to": "Pilot MCP Server",
+   "type": "DocType"
+  },
+  {
+   "color": "Green",
+   "doc_view": "List",
+   "icon": "settings",
+   "label": "Pilot Settings",
+   "link_to": "Pilot Settings",
+   "type": "DocType"
+  }
+ ],
+ "title": "Pilot",
+ "type": "Workspace"
+}

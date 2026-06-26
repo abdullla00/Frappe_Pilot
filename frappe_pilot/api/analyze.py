@@ -5,8 +5,11 @@ import frappe
 from frappe_pilot.api.analyze_agent import run_agent
 from frappe_pilot.api.analyze_tools import parse_page_context
 from frappe_pilot.utils.llm import has_api_key
-from frappe_pilot.utils.navigation import process_reply_navigation, try_context_navigation
-from frappe_pilot.utils.settings import get_advisor_config, user_has_pilot_access
+from frappe_pilot.utils.advisor_calc import try_calc_fast_path
+from frappe_pilot.utils.advisor_intent import detect_intent, resolve_agent_mode
+from frappe_pilot.utils.advisor_reply import finalize_advisor_reply
+from frappe_pilot.utils.navigation import filter_self_nav_links, process_reply_navigation, try_context_navigation
+from frappe_pilot.utils.settings import get_advisor_config, user_has_advisor_access
 from frappe_pilot.api.context_utils import (
 	build_context_prefix,
 	format_doc_summary_block,
@@ -18,24 +21,8 @@ from frappe_pilot.api.context_utils import (
 	resolve_form_context,
 )
 
-DIAGNOSE_TRIGGERS = frozenset({
-	"diagnose this record",
-	"flag anything unusual",
-	"why are these records here?",
-	"why is this total high?",
-	"دەستنیشانکردنی کێشەکان",
-})
-
-
 def _resolve_mode(message, mode=""):
-	if mode in ("explain", "diagnose"):
-		return mode
-	normalised = (message or "").strip().lower()
-	if normalised in DIAGNOSE_TRIGGERS or normalised.startswith("diagnose "):
-		return "diagnose"
-	if "what's wrong" in normalised or "what is wrong" in normalised:
-		return "diagnose"
-	return "explain"
+	return resolve_agent_mode(message, mode)
 
 
 def _resolve_reply_locale(reply_locale, message, langs):
@@ -78,8 +65,8 @@ def chat(
 ):
 	"""Advisor chat for the current page/document."""
 
-	if not user_has_pilot_access():
-		return _empty_response(reply="You do not have permission to use Frappe Pilot.")
+	if not user_has_advisor_access():
+		return _empty_response(reply="You do not have permission to use the Advisor tab.")
 
 	advisor_cfg = get_advisor_config()
 	if not advisor_cfg.get("enabled"):
@@ -100,6 +87,7 @@ def chat(
 		route = route or f"query-report > {page_ctx.get('report_name')}"
 
 	resolved_mode = _resolve_mode(message, mode)
+	intent_info = detect_intent(message, mode=mode)
 
 	context_nav = try_context_navigation(
 		message,
@@ -129,7 +117,8 @@ def chat(
 
 	current_context = get_context_key(doctype, docname, list_doctype, route)
 	last_context = frappe.session.get("ai_analyze_last_context") or ""
-	if last_context != current_context:
+	persist_chat = bool(advisor_cfg.get("persist_chat_on_route"))
+	if not persist_chat and last_context != current_context:
 		history = []
 		frappe.session["ai_analyze_last_context"] = current_context
 
@@ -146,18 +135,28 @@ def chat(
 	history.append({"role": "user", "content": user_turn})
 
 	try:
-		agent_result = run_agent(
-			user_turn,
-			seed_context=seed_context,
-			history=history[:-1],
-			mode=resolved_mode,
-			reply_locale=resolved_locale,
-			page_context_raw=page_context,
+		fast_result = try_calc_fast_path(
 			doctype=doctype,
 			docname=docname,
-			list_doctype=list_doctype,
-			route=route,
+			message=message,
+			intent_info=intent_info,
 		)
+		if fast_result:
+			agent_result = fast_result
+		else:
+			agent_result = run_agent(
+				user_turn,
+				seed_context=seed_context,
+				history=history[:-1],
+				mode=resolved_mode,
+				reply_locale=resolved_locale,
+				page_context_raw=page_context,
+				doctype=doctype,
+				docname=docname,
+				list_doctype=list_doctype,
+				route=route,
+				intent_info=intent_info,
+			)
 
 		if agent_result.get("needs_api_setup"):
 			return _empty_response(
@@ -168,10 +167,32 @@ def chat(
 			)
 
 		reply_text = agent_result.get("reply", "")
+		advisor_card = agent_result.get("advisor_card")
 		evidence = agent_result.get("evidence") or {"tools_used": [], "checks_run": 0}
+
+		if resolved_mode == "diagnose" and not advisor_card and doctype and docname:
+			advisor_card = _build_diagnose_card_from_checks(doctype, docname)
+			evidence["checks_run"] = len((advisor_card or {}).get("findings") or [])
+
+		reply_text = finalize_advisor_reply(
+			reply_text,
+			advisor_card=advisor_card,
+			message=message,
+			brief_replies_enabled=bool(advisor_cfg.get("brief_replies", 1)),
+		)
 
 		history.append({"role": "assistant", "content": reply_text})
 		frappe.session[session_key] = history
+		frappe.session["ai_advisor_last_intent"] = intent_info.get("intent")
+
+		if agent_result.get("llm_exhausted"):
+			return _empty_response(
+				reply=reply_text,
+				context_summary=context_summary,
+				evidence=evidence,
+				llm_exhausted=agent_result.get("llm_exhausted"),
+				advisor_card=advisor_card,
+			)
 
 		nav_result = process_reply_navigation(
 			reply_text,
@@ -184,16 +205,30 @@ def chat(
 			reply_locale=resolved_locale,
 		)
 
-		suggestions = _get_suggestions(doctype, docname, list_doctype, route, page_ctx)
+		nav_links = filter_self_nav_links(
+			nav_result.get("nav_links") or [],
+			doctype=doctype,
+			docname=docname,
+		)
+
+		suggestions = _get_suggestions(
+			doctype, docname, list_doctype, route, page_ctx,
+			last_intent=intent_info.get("intent"),
+			last_message=message,
+		)
 		return {
 			"reply": nav_result["reply"],
 			"chips": suggestions.get("chips") or [],
 			"chip_meta": suggestions.get("chip_meta") or {},
+			"chip_groups": suggestions.get("chip_groups") or [],
 			"context_summary": context_summary,
+			"context_bar": suggestions.get("context_bar") or {},
 			"evidence": evidence,
-			"nav_links": nav_result.get("nav_links") or [],
+			"nav_links": nav_links,
 			"navigation_action": nav_result.get("navigation_action"),
 			"reply_locale": resolved_locale,
+			"advisor_card": advisor_card,
+			"hide_evidence_hint": bool(advisor_cfg.get("show_context_bar", 1)),
 		}
 
 	except Exception as e:
@@ -205,6 +240,32 @@ def chat(
 			),
 			context_summary=context_summary,
 		)
+
+
+def _build_diagnose_card_from_checks(doctype, docname):
+	from frappe_pilot.api.doc_checks import run_document_checks
+	from frappe_pilot.utils.advisor_card import build_diagnose_card
+
+	checks = run_document_checks(doctype, docname)
+	issues = checks.get("issues") or []
+	evidence_lines = [
+		f"{issue.get('code')}: {issue.get('message')}"
+		for issue in issues[:6]
+		if issue.get("message")
+	]
+	verify_lines = [
+		issue.get("message")
+		for issue in issues
+		if issue.get("severity") == "high" and issue.get("message")
+	][:3]
+	if not verify_lines and issues:
+		verify_lines = ["Review the flagged fields on this form."]
+	return build_diagnose_card(
+		title=f"Diagnose · {doctype}",
+		findings=issues,
+		evidence=evidence_lines,
+		verify=verify_lines or ["No further action required."],
+	)
 
 
 def build_analyze_context(
@@ -280,7 +341,7 @@ def build_analyze_context(
 	return "\n".join(lines), summary_label
 
 
-def _get_suggestions(doctype, docname, list_doctype, route, page_ctx=None):
+def _get_suggestions(doctype, docname, list_doctype, route, page_ctx=None, last_intent="", last_message=""):
 	from frappe_pilot.api.suggestions import build_suggestions
 
 	return build_suggestions(
@@ -290,6 +351,24 @@ def _get_suggestions(doctype, docname, list_doctype, route, page_ctx=None):
 		route=route or "",
 		list_doctype=list_doctype or "",
 		page_ctx=page_ctx or {},
+		last_intent=last_intent or "",
+		last_message=last_message or "",
+	)
+
+
+@frappe.whitelist()
+def get_context_bar(doctype="", docname="", route="", list_doctype="", page_context=""):
+	"""Sticky context strip for Advisor tab."""
+	from frappe_pilot.api.suggestions import build_context_bar
+
+	doctype, docname, route = resolve_form_context(doctype, docname, route)
+	page_ctx = parse_page_context(page_context)
+	return build_context_bar(
+		doctype=doctype or "",
+		docname=docname or "",
+		route=route or "",
+		list_doctype=list_doctype or "",
+		page_ctx=page_ctx,
 	)
 
 

@@ -1,0 +1,104 @@
+{
+ "actions": [],
+ "creation": "2026-06-26 00:00:00",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "links": [],
+ "modified": "2026-06-26 00:00:00",
+ "modified_by": "Administrator",
+ "module": "Frappe Pilot",
+ "name": "Pilot Flow Definition",
+ "owner": "Administrator",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "row_format": "Dynamic",
+ "autoname": "field:flow_id",
+ "naming_rule": "By fieldname",
+ "allow_rename": 1,
+ "track_changes": 1,
+ "field_order": [
+  "flow_id",
+  "flow_name",
+  "status",
+  "version",
+  "schema_version",
+  "definition_json",
+  "is_system",
+  "updated_by",
+  "updated_at"
+ ],
+ "fields": [
+  {
+   "fieldname": "flow_id",
+   "fieldtype": "Data",
+   "label": "Flow ID",
+   "reqd": 1,
+   "unique": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "flow_name",
+   "fieldtype": "Data",
+   "label": "Flow Name",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Draft\nActive\nArchived",
+   "default": "Draft",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "version",
+   "fieldtype": "Int",
+   "label": "Version",
+   "default": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "schema_version",
+   "fieldtype": "Int",
+   "label": "Schema Version",
+   "default": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "definition_json",
+   "fieldtype": "JSON",
+   "label": "Definition JSON",
+   "reqd": 1
+  },
+  {
+   "fieldname": "is_system",
+   "fieldtype": "Check",
+   "label": "Is System",
+   "default": 0
+  },
+  {
+   "fieldname": "updated_by",
+   "fieldtype": "Link",
+   "label": "Updated By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "updated_at",
+   "fieldtype": "Datetime",
+   "label": "Updated At",
+   "read_only": 1
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1
+  }
+ ]
+}

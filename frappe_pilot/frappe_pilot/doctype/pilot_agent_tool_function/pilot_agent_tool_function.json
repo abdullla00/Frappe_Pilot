@@ -1,0 +1,109 @@
+{
+ "actions": [],
+ "creation": "2026-06-26 00:00:00",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "links": [],
+ "modified": "2026-06-26 00:00:00",
+ "modified_by": "Administrator",
+ "module": "Frappe Pilot",
+ "name": "Pilot Agent Tool Function",
+ "owner": "Administrator",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "field_order": [
+  "tool_name",
+  "tool_type",
+  "description",
+  "column_break_1",
+  "function_path",
+  "reference_doctype",
+  "source_app",
+  "auto_synced",
+  "lazy_synced",
+  "section_break_parameters",
+  "parameters_json"
+ ],
+ "fields": [
+  {
+   "fieldname": "tool_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Tool Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "tool_type",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Tool Type",
+   "options": "Pilot Agent Tool Type",
+   "reqd": 1
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Description",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "function_path",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Function Path"
+  },
+  {
+   "fieldname": "reference_doctype",
+   "fieldtype": "Link",
+   "label": "Reference DocType",
+   "options": "DocType"
+  },
+  {
+   "fieldname": "source_app",
+   "fieldtype": "Data",
+   "label": "Source App"
+  },
+  {
+   "default": "0",
+   "fieldname": "auto_synced",
+   "fieldtype": "Check",
+   "label": "Auto Synced"
+  },
+  {
+   "default": "0",
+   "fieldname": "lazy_synced",
+   "fieldtype": "Check",
+   "label": "Lazy Synced"
+  },
+  {
+   "fieldname": "section_break_parameters",
+   "fieldtype": "Section Break",
+   "label": "Parameters"
+  },
+  {
+   "fieldname": "parameters_json",
+   "fieldtype": "JSON",
+   "label": "Parameters JSON"
+  }
+ ],
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "read": 1,
+   "role": "System Manager",
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "allow_rename": 1,
+ "autoname": "field:tool_name",
+ "naming_rule": "By fieldname",
+ "track_changes": 1
+}

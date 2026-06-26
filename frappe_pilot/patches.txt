@@ -7,3 +7,12 @@
 frappe_pilot.patches.v1_0.migrate_pilot_enabled_language
 frappe_pilot.patches.v1_0.ensure_arabic_language
 frappe_pilot.patches.v1_0.ensure_english_pilot_language
+frappe_pilot.patches.v1_0.migrate_pilot_allowed_roles
+frappe_pilot.patches.v1_0.migrate_llm_providers
+frappe_pilot.patches.v1_0.reconcile_llm_provider_columns
+frappe_pilot.patches.v1_0.migrate_insight_allowed_roles
+frappe_pilot.patches.v1_0.migrate_insight_settings_defaults
+frappe_pilot.patches.v1_0.migrate_insight_disallow_tables
+frappe_pilot.patches.v1_0.migrate_advisor_settings_defaults
+frappe_pilot.patches.v2_0.seed_platform
+frappe_pilot.patches.v2_0.sync_pilot_desk

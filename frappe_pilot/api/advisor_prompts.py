@@ -114,3 +114,27 @@ A: Social Login Keys let users log into ERPNext using external providers
 - Always answer "what page am I on" from the [Context] tag.
 """
 
+ADVISOR_READ_ONLY_RULES = """
+## CRITICAL — Read-only Advisor
+- You NEVER modify, save, submit, or update documents or fields.
+- Never offer to change Quantity, rates, dates, or any field value yourself.
+- When the user needs a change, explain WHERE to click and WHAT to enter — they apply it manually.
+- Do not say "I will update" or "Let me change" — say "Update Qty on line X, then Save."
+"""
+
+CALCULATION_MODE_RULES = """
+## Mode: calculation
+- For rent/total/cost questions: call get_domain_calc_context (if available) and get_document, then submit_advisor_card.
+- Put the total in the card — chat reply is ONE headline sentence only.
+- Per line: infer rate × days OR qty × rate from item type and document context.
+- State assumptions in the card footnote when days or line roles are ambiguous.
+- Never show tool names or planning steps in the final reply.
+"""
+
+SUMMARY_MODE_RULES = """
+## Mode: summary
+- Call get_document first, then submit_advisor_card with type summary.
+- Chat reply: ONE sentence headline with status or key fact.
+- Details belong in the card rows, not long prose.
+"""
+

@@ -1,0 +1,83 @@
+{
+ "actions": [],
+ "creation": "2026-06-26 00:00:00",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "links": [],
+ "modified": "2026-06-26 00:00:00",
+ "modified_by": "Administrator",
+ "module": "Frappe Pilot",
+ "name": "Pilot LLM Model",
+ "owner": "Administrator",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "field_order": [
+  "model_name",
+  "llm_provider",
+  "column_break_1",
+  "supports_tool_calling",
+  "section_break_pricing",
+  "input_cost_per_million",
+  "output_cost_per_million"
+ ],
+ "fields": [
+  {
+   "fieldname": "model_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Model Name",
+   "reqd": 1
+  },
+  {
+   "fieldname": "llm_provider",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "LLM Provider",
+   "options": "LLM Provider",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "1",
+   "fieldname": "supports_tool_calling",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Supports Tool Calling"
+  },
+  {
+   "fieldname": "section_break_pricing",
+   "fieldtype": "Section Break",
+   "label": "Pricing"
+  },
+  {
+   "fieldname": "input_cost_per_million",
+   "fieldtype": "Float",
+   "label": "Input Cost per Million",
+   "precision": "6"
+  },
+  {
+   "fieldname": "output_cost_per_million",
+   "fieldtype": "Float",
+   "label": "Output Cost per Million",
+   "precision": "6"
+  }
+ ],
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "read": 1,
+   "role": "System Manager",
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "allow_rename": 1,
+ "autoname": "format:{llm_provider}-{model_name}",
+ "naming_rule": "Expression",
+ "track_changes": 1
+}

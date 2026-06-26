@@ -1,0 +1,78 @@
+{
+ "actions": [],
+ "creation": "2026-06-26 00:00:00",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "llm_provider",
+  "row_label",
+  "priority",
+  "limited",
+  "enabled",
+  "api_key",
+  "model"
+ ],
+ "fields": [
+  {
+   "default": "1",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Enabled"
+  },
+  {
+   "fieldname": "priority",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Priority",
+   "reqd": 1
+  },
+  {
+   "fieldname": "limited",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Limited",
+   "read_only": 1
+  },
+  {
+   "fieldname": "llm_provider",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "LLM Provider",
+   "link_filters": "[[\"LLM Provider\",\"is_active\",\"=\",1]]",
+   "options": "LLM Provider",
+   "reqd": 1
+  },
+  {
+   "fieldname": "row_label",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Label"
+  },
+  {
+   "fetch_from": "llm_provider.default_model",
+   "fetch_if_empty": 1,
+   "fieldname": "model",
+   "fieldtype": "Data",
+   "label": "Model"
+  },
+  {
+   "fieldname": "api_key",
+   "fieldtype": "Password",
+   "label": "API Key"
+  }
+ ],
+ "istable": 1,
+ "links": [],
+ "modified": "2026-06-26 05:53:49.540000",
+ "modified_by": "Administrator",
+ "module": "Frappe Pilot",
+ "name": "Pilot LLM Provider",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

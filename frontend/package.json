@@ -1,0 +1,29 @@
+{
+  "name": "frappe-pilot-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build --base=/assets/frappe_pilot/pilot/ && npm run copy-html-entry",
+    "preview": "vite preview",
+    "copy-html-entry": "cp ../frappe_pilot/public/pilot/index.html ../frappe_pilot/www/pilot.html"
+  },
+  "dependencies": {
+    "frappe-js-sdk": "^1.11.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.28.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@types/node": "^22.10.1",
+    "@vitejs/plugin-react": "^4.3.3",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.15",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11"
+  }
+}

@@ -12,7 +12,15 @@ from frappe_pilot.utils.i18n import (
 	format_greet,
 	localize_actions,
 )
-from frappe_pilot.utils.settings import get_chip_locale_scope, get_enabled_languages
+from frappe_pilot.utils.settings import get_advisor_config, get_chip_locale_scope, get_enabled_languages
+from frappe_pilot.utils.advisor_intent import INTENT_CALCULATION, INTENT_DIAGNOSE, INTENT_SUMMARY
+from frappe_pilot.utils.advisor_profile import (
+	get_advisor_profile,
+	get_greet_facts,
+	get_profile_analyze_chips,
+	get_profile_guide_chips,
+	get_profile_status,
+)
 
 MAX_CHIPS = 4
 MAX_ACTIONS = 4
@@ -269,6 +277,23 @@ ANALYZE_SAVED_CHIPS = {
 		"Summarize this order",
 		"What should I do next?",
 	],
+	"Quotation": [
+		"Summarize this quotation",
+		"Calculate for 4 days",
+		"Diagnose this record",
+		"Convert to Sales Order",
+	],
+	"Job Order": [
+		"Summarize this job",
+		"Linked tickets?",
+		"Explain days charged",
+		"What should I do next?",
+	],
+	"Service Ticket": [
+		"Summarize this ticket",
+		"Linked Job Order?",
+		"Diagnose this record",
+	],
 	"Pilot Settings": [
 		"Explain each settings tab",
 		"How do API keys work here?",
@@ -425,20 +450,39 @@ def suggest_chips(doctype="", docname="", list_doctype="", route="", page_ctx=No
 	return result.get("chips") or []
 
 
-def build_suggestions(*, tab, doctype, docname, route, list_doctype, page_ctx, sidebar_locale="en"):
+def build_suggestions(*, tab, doctype, docname, route, list_doctype, page_ctx, sidebar_locale="en", last_intent="", last_message=""):
 	tab = (tab or "advisor").lower()
 	if tab in ("analyze", "guide"):
 		tab = "advisor"
 	ctx = _resolve_context(doctype, docname, route, list_doctype, page_ctx)
 	langs = get_enabled_languages()
 	chip_scope = get_chip_locale_scope()
+	advisor_cfg = get_advisor_config()
 
 	if tab == "build":
 		raw_chips = []
 		greet_en = _build_build_greet(ctx)
 		actions = _build_build_actions(ctx)[:MAX_ACTIONS]
+	elif tab == "insight":
+		raw_chips = _build_insight_chips()
+		greet_en = _build_insight_greet()
+		actions = []
+		structured = _normalize_insight_chips(raw_chips)
+		structured = apply_chip_locale_scope(structured, langs, sidebar_locale, chip_scope)
+		greet_out = format_greet(greet_en, ctx, tab, langs, sidebar_locale=sidebar_locale)
+		return {
+			"greet": greet_out["greet"],
+			"greet_locale": greet_out.get("greet_locale") or "en",
+			"chips": structured,
+			"chip_meta": build_chip_meta(structured),
+			"actions": [],
+		}
 	else:
 		raw_chips = _build_advisor_chips(ctx)
+		if advisor_cfg.get("followup_chips") and last_message:
+			followups = build_followup_chips(ctx, last_intent=last_intent, last_message=last_message)
+			if followups:
+				raw_chips = followups + [c for c in raw_chips if c not in followups]
 		greet_en = _build_analyze_greet(ctx)
 		actions = []
 
@@ -449,13 +493,24 @@ def build_suggestions(*, tab, doctype, docname, route, list_doctype, page_ctx, s
 		localized_actions, langs, sidebar_locale, chip_scope
 	)
 	greet_out = format_greet(greet_en, ctx, tab, langs, sidebar_locale=sidebar_locale)
-	return {
+	result = {
 		"greet": greet_out["greet"],
 		"greet_locale": greet_out.get("greet_locale") or "en",
 		"chips": structured,
 		"chip_meta": build_chip_meta(structured),
 		"actions": localized_actions,
 	}
+	if tab == "advisor" and advisor_cfg.get("group_chips"):
+		result["chip_groups"] = _group_advisor_chips(structured, ctx, sidebar_locale=sidebar_locale)
+	if tab == "advisor" and advisor_cfg.get("show_context_bar"):
+		result["context_bar"] = build_context_bar(
+			doctype=doctype,
+			docname=docname,
+			route=route,
+			list_doctype=list_doctype,
+			page_ctx=page_ctx,
+		)
+	return result
 
 
 def _parse_page_context(page_context):
@@ -518,6 +573,11 @@ def _load_doc_signals(doctype, docname):
 		"docstatus": None,
 		"outstanding_amount": None,
 		"has_rental_order_link": False,
+		"workflow_state": None,
+		"customer_name": None,
+		"items_count": 0,
+		"status_label": "",
+		"greet_facts": [],
 	}
 
 	if not frappe.db.exists(doctype, docname):
@@ -531,13 +591,29 @@ def _load_doc_signals(doctype, docname):
 	except frappe.PermissionError:
 		return info
 
+	profile = get_advisor_profile(doctype)
 	info["docstatus"] = doc.docstatus
+	info["status_label"] = get_profile_status(doc, profile)
+	info["greet_facts"] = get_greet_facts(doc, profile)
 
 	if doc.meta.has_field("outstanding_amount"):
 		info["outstanding_amount"] = doc.get("outstanding_amount")
 
 	if doc.meta.has_field("rental_order"):
 		info["has_rental_order_link"] = bool(doc.get("rental_order"))
+	elif doc.meta.has_field("custom_rental_order"):
+		info["has_rental_order_link"] = bool(doc.get("custom_rental_order"))
+
+	if doc.meta.has_field("workflow_state"):
+		info["workflow_state"] = doc.get("workflow_state")
+
+	for field in ("customer_name", "party_name", "client_company", "customer"):
+		if doc.meta.has_field(field) and doc.get(field):
+			info["customer_name"] = doc.get(field)
+			break
+
+	if doc.meta.has_field("items") and doc.get("items"):
+		info["items_count"] = len(doc.get("items"))
 
 	return info
 
@@ -625,7 +701,9 @@ def _build_analyze_chips(ctx):
 def _analyze_saved_doc_chips(ctx):
 	doctype = ctx["doctype"]
 	docstatus = ctx["docstatus"]
-	chips = list(ANALYZE_SAVED_CHIPS.get(doctype, []))
+	profile_chips = get_profile_analyze_chips(doctype)
+	chips = profile_chips or list(ANALYZE_SAVED_CHIPS.get(doctype, []))
+	chips = _filter_permission_chips(chips, doctype, ctx.get("docname"))
 
 	if not chips:
 		if ctx["has_checks"]:
@@ -689,10 +767,15 @@ def _route_analyze_chips(ctx):
 
 def _build_analyze_greet(ctx):
 	if ctx["has_saved_doc"]:
-		return (
-			f"I can analyze <strong>{ctx['doctype']}: {ctx['docname']}</strong> "
-			"using live data and automated checks. Ask me anything or tap a suggestion:"
-		)
+		facts = ctx.get("greet_facts") or []
+		status = ctx.get("status_label") or ""
+		parts = [f"<strong>{ctx['doctype']}: {ctx['docname']}</strong>"]
+		if status:
+			parts.append(_escape_greet_fact(status))
+		for fact in facts[:4]:
+			if fact.lower() not in (status or "").lower():
+				parts.append(_escape_greet_fact(fact))
+		return " · ".join(parts) + " — ask a question or tap a suggestion:"
 	if ctx["doctype"]:
 		return (
 			f"You're on a new <strong>{ctx['doctype']}</strong> form. "
@@ -722,6 +805,10 @@ def _build_analyze_greet(ctx):
 
 
 def _build_guide_chips(ctx):
+	if ctx["doctype"]:
+		profile_chips = get_profile_guide_chips(ctx["doctype"])
+		if profile_chips:
+			return list(profile_chips)
 	if ctx["doctype"] and ctx["doctype"] in GUIDE_FORM_CHIPS:
 		return list(GUIDE_FORM_CHIPS[ctx["doctype"]])
 
@@ -893,3 +980,297 @@ def _build_build_actions(ctx):
 			"prompt": "Create an approval workflow for ",
 		},
 	]
+
+
+def _normalize_insight_chips(raw_chips):
+	"""Insight presets are structured dicts — do not pass through expand_split_chips."""
+	out = []
+	for chip in raw_chips or []:
+		if not isinstance(chip, dict):
+			continue
+		label = chip.get("label") or chip.get("prompt") or ""
+		if not label:
+			continue
+		out.append(
+			{
+				"prompt": chip.get("prompt") or label,
+				"label": label,
+				"locale": chip.get("locale") or "en",
+				"mode": chip.get("mode") or ("insight_preset" if chip.get("preset_id") else "insight_followup"),
+				"preset_id": chip.get("preset_id") or "",
+			}
+		)
+	return out
+
+
+def _build_insight_chips():
+	from frappe_pilot.api.insight_presets import INSIGHT_CHIP_PRESETS
+
+	phase1 = (
+		"pl_this_month",
+		"cash_position",
+		"stock_shortage",
+		"overdue_so",
+		"ar_summary",
+		"ap_due_week",
+		"budget_variance",
+		"top_customers_ytd",
+	)
+	chips = []
+	for preset_id in phase1:
+		preset = INSIGHT_CHIP_PRESETS.get(preset_id)
+		if not preset:
+			continue
+		chips.append(
+			{
+				"label": preset["label"],
+				"prompt": preset["label"],
+				"preset_id": preset_id,
+				"mode": "insight_preset",
+			}
+		)
+	return chips[:MAX_CHIPS]
+
+
+def build_insight_followup_chips(message="", micro_report=None, evidence=None, *, limit=3):
+	"""Return a small set of chips related to the last Insight question."""
+	message_l = (message or "").lower()
+	mr = micro_report or {}
+	evidence = evidence or {}
+	title_l = (mr.get("title") or "").lower()
+	tools = evidence.get("tools_used") or []
+	reports = [r.lower() for r in (evidence.get("reports_used") or [])]
+	preset_id = evidence.get("preset_id") or ""
+
+	chips: list[dict] = []
+
+	# Per-section drill-down from prior turn evidence
+	for tbl in evidence.get("tables") or []:
+		if not isinstance(tbl, dict):
+			continue
+		title = tbl.get("title") or tbl.get("doctype") or tbl.get("report_name")
+		dt = tbl.get("doctype") or ""
+		if not title:
+			continue
+		prompt = f"Show more detail for {title}"
+		if dt:
+			prompt = f"Break down {title} by customer" if dt == "Sales Invoice" else f"Show more detail for {title} ({dt})"
+		chips.append(
+			{
+				"label": f"Drill into {title[:28]}",
+				"prompt": prompt,
+				"mode": "insight_followup",
+			}
+		)
+		if len(chips) >= limit:
+			return chips[:limit]
+
+	def _chip(label, prompt, preset=""):
+		entry = {"label": label, "prompt": prompt, "mode": "insight_followup"}
+		if preset:
+			entry["preset_id"] = preset
+			entry["mode"] = "insight_preset"
+		return entry
+
+	# Sales invoices / receivables
+	if any(
+		kw in message_l
+		for kw in ("invoice", "unpaid", "receivable", "outstanding", "sales invoice", " ar")
+	) or "sales invoice" in title_l or "get_list_sample" in tools:
+		chips.extend(
+			[
+				_chip(
+					"Outstanding by customer",
+					"What is the total outstanding amount grouped by customer for unpaid sales invoices?",
+				),
+				_chip("Overdue invoices only", "Show sales invoices that are past their due date"),
+				_chip("AR summary", "Accounts receivable summary", preset="ar_summary"),
+			]
+		)
+
+	# Purchase / payables
+	elif any(kw in message_l for kw in ("purchase", "bill", "payable", "supplier", " ap")) or "purchase invoice" in title_l:
+		chips.extend(
+			[
+				_chip("Bills due this week", "Bills due this week", preset="ap_due_week"),
+				_chip("Cash position", "Cash position", preset="cash_position"),
+			]
+		)
+
+	# Stock / inventory
+	elif any(kw in message_l for kw in ("stock", "inventory", "item", "reorder", "warehouse")):
+		chips.extend(
+			[
+				_chip("Stock below reorder", "Stock below reorder", preset="stock_shortage"),
+				_chip("Which items are out of stock?", "Which items are below reorder level?"),
+			]
+		)
+
+	# P&L / financial reports
+	elif any(kw in message_l for kw in ("p&l", "profit", "loss", "revenue", "expense", "margin")) or any(
+		"p&l" in r or "profit" in r for r in reports
+	) or preset_id == "pl_this_month":
+		chips.extend(
+			[
+				_chip("Compare to last month", "Compare profit and loss this month versus last month"),
+				_chip("Budget vs actual", "Budget vs actual", preset="budget_variance"),
+				_chip("Cash position", "Cash position", preset="cash_position"),
+			]
+		)
+
+	# Cash / bank
+	elif any(kw in message_l for kw in ("cash", "bank", "balance")) or preset_id == "cash_position":
+		chips.extend(
+			[
+				_chip("AR summary", "Accounts receivable summary", preset="ar_summary"),
+				_chip("Bills due this week", "Bills due this week", preset="ap_due_week"),
+			]
+		)
+
+	# Sales orders
+	elif any(kw in message_l for kw in ("sales order", "overdue order", "delivery")) or preset_id == "overdue_so":
+		chips.extend(
+			[
+				_chip("Top customers YTD", "Top 5 customers", preset="top_customers_ytd"),
+				_chip("AR summary", "Accounts receivable summary", preset="ar_summary"),
+			]
+		)
+
+	# Customers
+	elif any(kw in message_l for kw in ("customer", "client")) or preset_id == "top_customers_ytd":
+		chips.extend(
+			[
+				_chip("Top customers YTD", "Top 5 customers", preset="top_customers_ytd"),
+				_chip("Overdue sales orders", "Overdue sales orders", preset="overdue_so"),
+			]
+		)
+
+	# Budget
+	elif any(kw in message_l for kw in ("budget", "variance", "actual")) or preset_id == "budget_variance":
+		chips.extend(
+			[
+				_chip("P&L this month", "P&L this month", preset="pl_this_month"),
+				_chip("Compare to last month", "Compare profit and loss this month versus last month"),
+			]
+		)
+
+	if not chips:
+		chips = [
+			_chip("Cash position", "Cash position", preset="cash_position"),
+			_chip("AR summary", "Accounts receivable summary", preset="ar_summary"),
+			_chip("P&L this month", "P&L this month", preset="pl_this_month"),
+		]
+
+	seen = set()
+	unique = []
+	for chip in chips:
+		key = chip.get("prompt") or chip.get("label")
+		if key in seen:
+			continue
+		seen.add(key)
+		unique.append(chip)
+	return unique[:limit]
+
+
+def _build_insight_greet():
+	return (
+		"Ask about business performance across your company — P&L, cash, stock, "
+		"receivables, and more. Pick a quick insight below or type your question."
+	)
+
+
+# ── Advisor context bar, follow-ups, chip groups ─────────────────────────────
+
+
+def _escape_greet_fact(text):
+	import html
+
+	return html.escape(str(text or ""))
+
+
+def build_context_bar(*, doctype="", docname="", route="", list_doctype="", page_ctx=None):
+	page_ctx = page_ctx or {}
+	ctx = _resolve_context(doctype, docname, route, list_doctype, page_ctx)
+	parts = []
+	if ctx["has_saved_doc"]:
+		parts.append(ctx["doctype"])
+		parts.append(ctx["docname"])
+		if ctx.get("status_label"):
+			parts.append(ctx["status_label"])
+		elif ctx.get("customer_name"):
+			parts.append(ctx["customer_name"])
+		if ctx.get("items_count"):
+			parts.append(f"{ctx['items_count']} items")
+		from frappe_pilot.utils.advisor_profile import get_context_enrichments
+
+		for fact in get_context_enrichments(doctype, docname):
+			if fact not in parts:
+				parts.append(fact)
+	elif ctx["list_doctype"]:
+		parts.append(f"{ctx['list_doctype']} List")
+	elif ctx["report_name"]:
+		parts.append(f"Report: {ctx['report_name']}")
+	elif doctype and ctx["is_new"]:
+		parts.append(f"New {doctype}")
+	return {"parts": parts, "label": " · ".join(parts)}
+
+
+def build_followup_chips(ctx, *, last_intent="", last_message=""):
+	intent = (last_intent or "").lower()
+	doctype = ctx.get("doctype") or ""
+	chips = []
+
+	if intent == INTENT_CALCULATION:
+		chips = ["Calculate for 7 days", "Calculate for 14 days", "Summarize this record"]
+	elif intent == INTENT_SUMMARY:
+		chips = ["What should I do next?", "Diagnose this record"]
+	elif intent == INTENT_DIAGNOSE:
+		chips = ["What should I fix first?", "Summarize this record"]
+	elif doctype == "Quotation":
+		chips = ["Calculate for 7 days", "Convert to Sales Order", "Summarize this quotation"]
+	elif doctype in ("Job Order", "Rental Order"):
+		chips = ["Linked tickets?", "Explain days charged", "What should I do next?"]
+
+	return _dedupe_cap(_filter_permission_chips(chips, doctype, ctx.get("docname")), limit=3)
+
+
+def _filter_permission_chips(chips, doctype, docname):
+	if not doctype or not docname:
+		return chips
+	filtered = []
+	for chip in chips:
+		lower = (chip or "").lower()
+		if "convert" in lower or "submit" in lower:
+			if not frappe.has_permission(doctype, "write", docname):
+				continue
+			if "submit" in lower and not frappe.has_permission(doctype, "submit", docname):
+				continue
+		if "sales order" in lower and not frappe.has_permission("Sales Order", "create"):
+			continue
+		filtered.append(chip)
+	return filtered
+
+
+def _group_advisor_chips(chips, ctx, sidebar_locale="en"):
+	from frappe_pilot.utils.i18n import UI_STRINGS
+
+	locale = sidebar_locale if sidebar_locale in UI_STRINGS else "en"
+	strings = UI_STRINGS.get(locale, UI_STRINGS["en"])
+	record_label = strings.get("advisor_chip_group_record", "This record")
+	howto_label = strings.get("advisor_chip_group_howto", "How to")
+
+	analyze_labels = []
+	guide_labels = []
+	guide_markers = ("how", "what is", "walk me", "where", "explain the fields")
+	for chip in chips:
+		text = (chip if isinstance(chip, str) else chip.get("label") or "").lower()
+		if any(text.startswith(m) or m in text for m in guide_markers):
+			guide_labels.append(chip)
+		else:
+			analyze_labels.append(chip)
+	groups = []
+	if analyze_labels:
+		groups.append({"label": record_label, "chips": analyze_labels[:MAX_CHIPS]})
+	if guide_labels:
+		groups.append({"label": howto_label, "chips": guide_labels[:MAX_CHIPS]})
+	return groups

@@ -539,7 +539,7 @@ def chat(message, history="", doctype="", docname=""):
 	Accepts an optional `history` JSON array of prior {role, content} pairs
 	so the LLM retains context across multiple turns in the same session.
 	"""
-	from frappe_pilot.utils.llm import chat_completion, get_active_provider, has_api_key
+	from frappe_pilot.utils.llm import ProviderExhaustedError, chat_completion, get_active_provider, has_api_key
 	from frappe_pilot.utils.settings import get_build_config, user_has_build_access
 
 	build_cfg = get_build_config()
@@ -598,6 +598,11 @@ def chat(message, history="", doctype="", docname=""):
 			response = _call_llm(messages)
 		except Exception as exc:
 			exc_str = str(exc)
+			if isinstance(exc, ProviderExhaustedError):
+				out = {"reply": str(exc), "preview": None}
+				if getattr(exc, "payload", None):
+					out["llm_exhausted"] = exc.payload
+				return out
 			if "rate_limit_exceeded" in exc_str or "429" in exc_str:
 				import re
 				wait = re.search(r"try again in ([^\\.,']+)", exc_str)

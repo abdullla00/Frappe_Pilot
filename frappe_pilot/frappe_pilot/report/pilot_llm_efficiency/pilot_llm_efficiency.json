@@ -1,0 +1,24 @@
+{
+ "add_total_row": 1,
+ "columns": [
+  {"fieldname": "model", "fieldtype": "Link", "label": "Model", "options": "Pilot LLM Model", "width": 180},
+  {"fieldname": "runs", "fieldtype": "Int", "label": "Runs", "width": 80},
+  {"fieldname": "avg_latency", "fieldtype": "Float", "label": "Avg Latency (ms)", "width": 120},
+  {"fieldname": "total_cost", "fieldtype": "Currency", "label": "Total Cost", "width": 120}
+ ],
+ "creation": "2026-06-26 00:00:00",
+ "disabled": 0,
+ "doctype": "Report",
+ "filters": [],
+ "is_standard": "Yes",
+ "json": "{}",
+ "modified": "2026-06-26 00:00:00",
+ "modified_by": "Administrator",
+ "module": "Frappe Pilot",
+ "name": "Pilot LLM Efficiency",
+ "owner": "Administrator",
+ "ref_doctype": "Pilot Agent Run",
+ "report_name": "Pilot LLM Efficiency",
+ "report_type": "Script Report",
+ "roles": [{"role": "System Manager"}]
+}

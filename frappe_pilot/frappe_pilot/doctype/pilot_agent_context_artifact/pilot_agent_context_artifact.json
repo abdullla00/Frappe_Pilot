@@ -1,0 +1,116 @@
+{
+ "actions": [],
+ "creation": "2026-06-26 00:00:00",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "links": [],
+ "modified": "2026-06-26 00:00:00",
+ "modified_by": "Administrator",
+ "module": "Frappe Pilot",
+ "name": "Pilot Agent Context Artifact",
+ "owner": "Administrator",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "row_format": "Dynamic",
+ "autoname": "format:ART-{####}",
+ "naming_rule": "Expression",
+ "allow_rename": 1,
+ "editable_grid": 1,
+ "field_order": [
+  "conversation",
+  "agent_run",
+  "artifact_type",
+  "summary",
+  "payload_json",
+  "payload_file",
+  "reference_doctype",
+  "reference_name",
+  "visibility",
+  "context_policy",
+  "token_estimate",
+  "expires_on"
+ ],
+ "fields": [
+  {
+   "fieldname": "conversation",
+   "fieldtype": "Link",
+   "label": "Conversation",
+   "options": "Pilot Agent Conversation"
+  },
+  {
+   "fieldname": "agent_run",
+   "fieldtype": "Link",
+   "label": "Agent Run",
+   "options": "Pilot Agent Run"
+  },
+  {
+   "fieldname": "artifact_type",
+   "fieldtype": "Select",
+   "label": "Artifact Type",
+   "options": "JSON\nFile\nText",
+   "default": "JSON"
+  },
+  {
+   "fieldname": "summary",
+   "fieldtype": "Small Text",
+   "label": "Summary"
+  },
+  {
+   "fieldname": "payload_json",
+   "fieldtype": "Code",
+   "label": "Payload JSON",
+   "options": "JSON"
+  },
+  {
+   "fieldname": "payload_file",
+   "fieldtype": "Attach",
+   "label": "Payload File"
+  },
+  {
+   "fieldname": "reference_doctype",
+   "fieldtype": "Link",
+   "label": "Reference DocType",
+   "options": "DocType"
+  },
+  {
+   "fieldname": "reference_name",
+   "fieldtype": "Dynamic Link",
+   "label": "Reference Name",
+   "options": "reference_doctype"
+  },
+  {
+   "fieldname": "visibility",
+   "fieldtype": "Select",
+   "label": "Visibility",
+   "options": "user_visible\nmodel_visible\nui_only\naudit_only\ndeveloper_only",
+   "default": "user_visible"
+  },
+  {
+   "fieldname": "context_policy",
+   "fieldtype": "Select",
+   "label": "Context Policy",
+   "options": "include_full\ninclude_summary\ninclude_reference\ninclude_on_demand\nexclude\ntransient_only\ntoken_budgeted\nprovider_cached",
+   "default": "include_full"
+  },
+  {
+   "fieldname": "token_estimate",
+   "fieldtype": "Int",
+   "label": "Token Estimate"
+  },
+  {
+   "fieldname": "expires_on",
+   "fieldtype": "Datetime",
+   "label": "Expires On"
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1
+  }
+ ]
+}

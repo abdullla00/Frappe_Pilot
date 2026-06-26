@@ -2,7 +2,7 @@
 
 **v1.0** — An AI-powered assistant embedded natively inside ERPNext as a Frappe custom app. It lives as a resizable sidebar on every page — no tab switching, no separate tools.
 
-Built as two top-level capabilities: an **Advisor** tab (merged Analyze + Guide) that reads, explains, and navigates the current page, and a **Build** tab with **Chat** and **Changes** (change log) subtabs.
+Built as three top-level sidebar tabs: an **Advisor** tab (merged Analyze + Guide) that reads, explains, and navigates the current page; an **Insight** tab for cross-business KPI and report questions; and a **Build** tab with **Chat** and **Changes** (change log) subtabs.
 
 ![Frappe Pilot Sidebar](screenshot_ai.png)
 
@@ -23,6 +23,38 @@ Reads and analyzes the **specific page or document** you are viewing using a **r
 - **Smart navigation** — Advisor replies can include desk links. **Pilot Settings > Navigation**: auto-navigate on "go to" requests; optionally close sidebar after navigation.
 
 Evidence line under each reply shows which tools ran and how many issues were found. Conversation history resets when you navigate to a different page.
+
+### Insight Tab
+Answers **business performance questions** across ERPNext using a read-only tool-using agent. Unlike Advisor (which focuses on the page you are on), Insight can run reports, sample lists, and cross-doctype queries site-wide — then renders structured **micro-reports** with KPIs, tables, and a brief narrative.
+
+**Requires ERPNext** on the site. Enabled per role in **Pilot Settings > Allowed Roles** (`insight_tab` checkbox).
+
+**The flow:**
+```
+You ask a KPI or report question (or tap a preset chip)
+      ↓
+Agent picks read-only tools (reports, list samples, link graph, …)
+      ↓
+Results assembled into a micro-report card (KPIs + tables)
+      ↓
+LLM narrates the answer + follow-up chips
+      ↓
+Optional: copy table, save KPI snapshot, open linked Frappe Insights workbook
+```
+
+**What Insight can do:**
+- **Run ERPNext reports** — P&L, Balance Sheet, AR/AP, stock shortage, budget variance, sales analytics, etc. (with company / fiscal-year defaults from the context bar)
+- **Sample & count lists** — filtered DocType rows across modules (e.g. overdue sales orders)
+- **Cross-doctype planning** — discovers Link/Table relationships via `get_related_doctypes` before multi-doctype questions
+- **Preset chips** — one-click shortcuts such as “P&L this month”, “Cash position”, “AR summary”, “Top 5 customers” ([`api/insight_presets.py`](frappe_pilot/api/insight_presets.py))
+- **Context bar** — company and fiscal defaults stored in browser `localStorage`; seeded from [`api/insight.get_defaults`](frappe_pilot/api/insight.py)
+- **Micro-report UI** — expandable sections, copy-table, partial-result warnings, evidence line (tools/reports/filters used)
+- **Save snapshot** — persist KPI snapshot when enabled in settings
+- **Daily digest** — optional scheduled email of preset insights (`tasks/insight_digest.py`)
+
+**Read-only by design** — no writes, no Build-style confirm step. Optional guarded SQL (`run_readonly_query`) is **System Manager only** and off by default.
+
+**Access control** — allow-all minus disallow lists in **Pilot Settings > Insight** (excluded modules/DocTypes) plus normal Frappe read permissions on each resource.
 
 ### Build Tab
 Turns plain English into real ERPNext customisations — with a mandatory preview and confirm step before anything touches the database. The welcome capability grid is context-aware: on a Sales Invoice form, quick actions prefill prompts with that DocType.
@@ -95,14 +127,73 @@ The **Undo** button calls `rollback()` — deletes the created record from ERPNe
 
 | Layer | Technology |
 |---|---|
-| Framework | Frappe v15 / ERPNext v16 |
+| Framework | Frappe v15 / v16, ERPNext v15 / v16 |
 | LLM | Groq API — Llama 3.3-70b-versatile |
 | Tool Calling | Groq OpenAI-compatible function calling |
 | Validation | Pydantic v2 |
 | Frontend | Vanilla JavaScript injected via `app_include_js` hook |
-| Styling | Frappe CSS variables — adapts to all Frappe themes |
+| Styling | Frappe CSS variables + Pilot green brand (`#005931`) on desk, SPA, and advisor sidebar |
 | Session State | Frappe session + Redis cache |
 | Change Log | Custom Frappe DocType (`AI Change Log`) |
+
+---
+
+## Desk & Branding
+
+Frappe Pilot ships a first-class desk experience alongside the advisor sidebar.
+
+| Surface | Route / entry | Notes |
+|---|---|---|
+| **Command Center** | `/desk/pilot` | Public workspace with hero block, live metrics, shortcuts, and core-area cards |
+| **Desktop app icon** | Desk home grid → **Frappe Pilot** | Same-tab navigation via **Workspace Sidebar** (not an external link) |
+| **Pilot Console (SPA)** | `/pilot` | React frontend for agents, chat, knowledge, flows, and MCP |
+| **Advisor sidebar** | Every desk page | Green accent tokens; **Advisor**, **Insight**, and **Build** tabs; dock tab on the right edge |
+
+### Naming convention (important)
+
+Desk routing depends on three related names staying aligned:
+
+| Artifact | Name | Purpose |
+|---|---|---|
+| Workspace | `Pilot` | URL slug → `/desk/pilot`; **title must match name** (desk icon routing slugs `title`, not `name`) |
+| Workspace Sidebar | `Frappe Pilot` | Must match the desktop icon label so the sidebar header shows the logo and routing works |
+| Desktop Icon | `Frappe Pilot` | App tile on the desk home; `link_type: Workspace Sidebar`, `link_to: Frappe Pilot` |
+
+Do **not** use `link_type: External` with `/desk/pilot` on the desktop icon — Frappe turns that into a full URL and opens it in a new tab.
+
+### Brand assets
+
+SVG logos live under `frappe_pilot/public/images/`:
+
+- `frappe-pilot-logo.svg` — desk desktop icon and sidebar header (via `app_logo_url` in `hooks.py`)
+- `frappe-pilot-mark.svg` — compact mark for the SPA and favicon contexts
+- `favicon.svg` — simplified favicon
+
+Primary brand color: **`#005931`** (used in the workspace hero, shortcuts, SPA theme, and advisor sidebar).
+
+### Desk sync lifecycle
+
+Fixtures are applied automatically on **install** and **migrate** via `frappe_pilot.setup.desk.sync_desk_from_app`. To re-apply manually after editing fixtures or assets:
+
+```bash
+cd apps/frappe_pilot/frontend && npm run build   # SPA assets
+bench build --app frappe_pilot                   # desk JS/CSS + images
+bench --site yoursite.localhost execute frappe_pilot.setup.desk.sync_desk_from_app
+bench --site yoursite.localhost clear-cache
+```
+
+Key fixture paths:
+
+```
+frappe_pilot/
+├── desktop_icon/frappe_pilot.json
+├── workspace/pilot/pilot.json
+├── workspace_sidebar/pilot.json
+├── custom_html_block/pilot_hero/pilot_hero.json
+└── setup/desk.py                    ← sync, migrate rename, uninstall purge
+```
+
+On migrate, a legacy sidebar named `Pilot` is renamed to `Frappe Pilot` when needed.
 
 ---
 
@@ -110,16 +201,32 @@ The **Undo** button calls `rollback()` — deletes the created record from ERPNe
 
 ```
 frappe_pilot/
-├── public/js/
-│   └── ai_sidebar.js               ← entire frontend — injected into every ERPNext page
+├── public/
+│   ├── js/ai_sidebar.js            ← sidebar UI (Advisor, Insight, Build tabs)
+│   ├── images/                     ← frappe-pilot-logo.svg, mark, favicon
+│   └── icons/desktop_icons/solid/  ← frappe_pilot.svg for desk icon resolver
+├── frontend/                       ← Pilot Console SPA (/pilot)
+├── desktop_icon/frappe_pilot.json  ← desk home app tile
+├── workspace/pilot/pilot.json      ← Command Center workspace
+├── workspace_sidebar/pilot.json    ← desk sidebar (named Frappe Pilot)
+├── custom_html_block/pilot_hero/   ← green hero block on workspace
+├── setup/desk.py                   ← desk fixture sync on install/migrate
 ├── api/
-│   ├── analyze.py                  ← Advisor API — merged analyze + guide with navigation
+│   ├── analyze.py                  ← Advisor API — merged analyze + guide
+│   ├── insight.py                  ← Insight tab chat API + snapshots
+│   ├── insight_agent.py            ← Insight tool loop + micro-report narration
+│   ├── insight_tools.py            ← Read-only report/list/SQL tools
+│   ├── insight_presets.py          ← One-click KPI preset chips
 │   ├── context_utils.py            ← Shared doc/meta/route context helpers
 │   ├── guide.py                    ← Deprecated shim → analyze.chat
 │   └── coding_agent.py             ← Build Agent — tool-calling, validation, rollback
+├── utils/
+│   ├── insight_permissions.py      ← Module/DocType disallow lists + access checks
+│   ├── insight_sql.py              ← Guarded read-only SQL (SM-only, optional)
+│   └── micro_report.py             ← KPI/table card builder
 └── frappe_pilot/
     └── doctype/
-        └── ai_change_log/          ← Audit trail DocType
+        └── ai_change_log/          ← Build audit trail DocType
 ```
 
 **How the sidebar gets into ERPNext:**
@@ -175,8 +282,8 @@ This context is injected as a prefix into every Guide message so the LLM cannot 
 ## Installation
 
 **Requirements:**
-- Frappe v15 bench
-- ERPNext v15
+- Frappe v15 or v16 bench
+- ERPNext v15 or v16 (required for **Insight** tab; Advisor and Build work without it for non-ERPNext sites)
 - Groq API key (free at console.groq.com)
 
 **Steps:**
@@ -194,20 +301,28 @@ bench --site yoursite.localhost migrate
 # Install Python dependency
 ./env/bin/pip install groq
 
-# Build assets
+# Build assets (desk JS + images + SPA)
+cd apps/frappe_pilot/frontend && npm run build
 bench build --app frappe_pilot
+
+# Sync desk fixtures (workspace, sidebar, desktop icon, hero block)
+bench --site yoursite.localhost execute frappe_pilot.setup.desk.sync_desk_from_app
+bench --site yoursite.localhost clear-cache
 
 # Restart
 bench restart
 ```
 
+After install, open **Frappe Pilot** from the desk home (same tab) or go directly to `/desk/pilot`. The sidebar header shows the Pilot logo when the workspace sidebar and desktop icon labels both read **Frappe Pilot**. **System Manager** gets Advisor, Insight, and Build tabs by default; adjust per role under **Pilot Settings > Allowed Roles**.
+
 ### Pilot Settings (desk UI)
 
 Open **Pilot Settings** (desk search or the gear icon in the Pilot sidebar header) to configure:
 
-- **General** — enable/disable Pilot, default tab, **sidebar position** (Right / Left / Bottom), allowed roles. Users can override position per browser via the dock picker in the sidebar header; ↺ resets to the site default.
+- **General** — enable/disable Pilot, default tab, **sidebar position** (Right / Left / Bottom), allowed roles (per-tab flags: Advisor, **Insight**, Build). Users can override position per browser via the dock picker in the sidebar header; ↺ resets to the site default.
 - **API Keys** — Groq, OpenAI, Gemini password fields (with site_config fallback)
 - **Analyze / Guide / Build** — models, token limits, temperatures, tool row caps
+- **Insight** — enable tab, model/temperature/token limits, max report/list rows, disallowed modules & DocTypes, optional read-only SQL, evidence line, save snapshot, KPI cache TTL, daily digest, Frappe Insights workbook links
 - **Advanced** — custom analyze prompt, disabled tools, debug logging
 
 If no API key is configured, opening Pilot shows a setup screen with a **Configure API Keys** button (System Manager only).
@@ -227,11 +342,29 @@ If no API key is configured, opening Pilot shows a setup screen with a **Configu
 
 ## Usage
 
-1. Open any page in ERPNext
-2. Click the **Pilot** tab on the right edge of the screen
-3. Use **Advisor** to summarize, diagnose, or ask how-to questions about the current page
-4. Use **Build > Chat** to create customisations in plain English
-5. Use **Build > Changes** to review or undo past Build changes
+1. Open any page in ERPNext, or go to **Desk → Frappe Pilot** (`/desk/pilot`) for the Command Center
+2. Click the **Pilot** tab on the right edge of the screen to open the sidebar
+3. Open **Pilot Console** at `/pilot` (or via the workspace shortcut) for agents, chat, and MCP
+4. Use **Advisor** to summarize, diagnose, or ask how-to questions about the **current page**
+5. Use **Insight** to ask KPI and cross-module business questions (reports, counts, trends)
+6. Use **Build > Chat** to create customisations in plain English
+7. Use **Build > Changes** to review or undo past Build changes
+
+**Example prompts for the Advisor tab:**
+```
+Summarize this Sales Invoice
+Diagnose this record — what looks wrong?
+How do I configure payment terms for a customer?
+```
+
+**Example prompts for the Insight tab:**
+```
+P&L this month for our default company
+How many overdue sales orders do we have?
+Top customers by revenue this year
+Stock items below reorder level
+Compare budget vs actual for this month
+```
 
 **Example prompts for the Build tab:**
 ```
@@ -248,11 +381,12 @@ Seed the Fleet Vehicle DocType with 3 sample records
 
 | Cannot | Why |
 |---|---|
-| Edit or delete existing fields or scripts | Creates only — no update tools yet |
-| Read full report result rows | Analyze uses route metadata only for reports in v1 |
-| Search across all business data | No global query tools — Analyze reads the open document only |
-| Create Print Formats, Email Templates, Reports | Not yet implemented |
-| Chain two write actions in one confirm | Each tool call is its own preview and confirm cycle |
+| Edit or delete existing fields or scripts (Build) | Creates only — no update tools yet |
+| Read full report result rows (Advisor) | Advisor uses route metadata + small samples; use **Insight** for report-driven KPIs |
+| Search across all business data (Advisor) | Advisor reads the open document/page; **Insight** handles cross-module queries |
+| Create Print Formats, Email Templates, Reports (Build) | Not yet implemented |
+| Chain two write actions in one confirm (Build) | Each tool call is its own preview and confirm cycle |
+| Write business data (Insight) | Insight is read-only; no document inserts or submits |
 
 ---
 
@@ -262,6 +396,7 @@ Seed the Fleet Vehicle DocType with 3 sample records
 - [ ] Print Format generation
 - [ ] Email Template creation
 - [x] Advisor tab — merged analyze + guide with smart navigation
+- [x] Insight tab — cross-module KPI/report micro-reports with preset chips
 - [ ] Report filter + column context in Advisor
 - [ ] List row selection context in Advisor
 - [ ] Multi-step tool chains in a single conversation turn

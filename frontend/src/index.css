@@ -1,0 +1,37 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --pilot-brand: #005931;
+  --pilot-brand-light: #0a7a48;
+  --pilot-brand-dark: #003d21;
+  --pilot-brand-bg: #e8f5ef;
+  --pilot-brand-50: #f0faf5;
+  --pilot-brand-100: #d4ede1;
+  --pilot-brand-200: #a8dcc4;
+  --pilot-brand-300: #6fbf98;
+  --pilot-brand-500: #005931;
+  --pilot-brand-600: #004927;
+  --pilot-brand-700: #003d21;
+  --pilot-brand-800: #002e19;
+  --pilot-brand-900: #001f11;
+}
+
+body {
+  @apply bg-slate-50 text-slate-900 antialiased;
+}
+
+@layer components {
+  .pilot-gradient-hero {
+    @apply bg-gradient-to-br from-pilot-50 via-white to-pilot-50;
+  }
+
+  .pilot-sidebar-header {
+    background: linear-gradient(180deg, rgba(240, 250, 245, 0.9) 0%, rgba(255, 255, 255, 1) 100%);
+  }
+
+  .pilot-card-hover {
+    @apply transition hover:border-pilot-300 hover:shadow-md hover:-translate-y-0.5;
+  }
+}

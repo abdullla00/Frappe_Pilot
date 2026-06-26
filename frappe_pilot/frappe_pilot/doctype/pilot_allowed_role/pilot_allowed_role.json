@@ -1,32 +1,105 @@
 {
  "actions": [],
- "creation": "2026-06-06 00:00:00.000000",
+ "creation": "2026-06-06 00:00:00",
  "doctype": "DocType",
  "editable_grid": 1,
  "engine": "InnoDB",
  "field_order": [
-  "role"
+  "role",
+  "column_break_trfj",
+  "advisor_tab",
+  "insight_tab",
+  "build_tab",
+  "agents_tab",
+  "flows_tab",
+  "knowledge_tab",
+  "integrations_tab",
+  "logs_tab"
  ],
  "fields": [
   {
+   "columns": 3,
    "fieldname": "role",
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Role",
    "options": "Role",
    "reqd": 1
+  },
+  {
+   "columns": 2,
+   "default": "1",
+   "fieldname": "advisor_tab",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Advisor Tab"
+  },
+  {
+   "columns": 2,
+   "default": "0",
+   "fieldname": "insight_tab",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Insight Tab"
+  },
+  {
+   "columns": 2,
+   "default": "0",
+   "fieldname": "build_tab",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Build Tab"
+  },
+  {
+   "default": "0",
+   "fieldname": "agents_tab",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Agents Tab"
+  },
+  {
+   "default": "0",
+   "fieldname": "flows_tab",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Flows Tab"
+  },
+  {
+   "default": "0",
+   "fieldname": "knowledge_tab",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Knowledge Tab"
+  },
+  {
+   "default": "0",
+   "fieldname": "integrations_tab",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Integrations Tab"
+  },
+  {
+   "default": "0",
+   "fieldname": "logs_tab",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Logs Tab"
+  },
+  {
+   "fieldname": "column_break_trfj",
+   "fieldtype": "Column Break"
   }
  ],
  "istable": 1,
  "links": [],
- "modified": "2026-06-06 00:00:00.000000",
+ "modified": "2026-06-17 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Frappe Pilot",
  "name": "Pilot Allowed Role",
  "owner": "Administrator",
  "permissions": [],
+ "row_format": "Dynamic",
  "sort_field": "creation",
  "sort_order": "DESC",
- "states": [],
- "track_changes": 0
+ "states": []
 }

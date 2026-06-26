@@ -248,9 +248,82 @@ def get_doc_summary(doctype, docname, user_message=""):
 		summary["child_tables"][field.label or field.fieldname] = {
 			"row_count": len(rows),
 			"rows": table_rows,
+			"fieldname": field.fieldname,
 		}
 
+	summary["child_tables"] = _order_child_tables(summary)
+	try:
+		from frappe_pilot.utils.advisor_profile import get_greet_facts, get_profile_status
+
+		profile = get_advisor_profile(doctype)
+		if profile:
+			summary["profile_status"] = get_profile_status(doc, profile)
+			summary["greet_facts"] = get_greet_facts(doc, profile)
+	except Exception:
+		pass
+
+	summary["fields"] = _order_summary_fields(summary, meta)
 	return summary
+
+
+def get_advisor_profile(doctype):
+	from frappe_pilot.utils.advisor_profile import get_advisor_profile as _get
+
+	return _get(doctype)
+
+
+def _order_summary_fields(summary, meta):
+	fields = dict(summary.get("fields") or {})
+	profile = get_advisor_profile(summary.get("doctype") or "")
+	if not profile or not fields:
+		return fields
+
+	priority_labels = []
+	for fieldname in list(profile.get("greet_fields") or []):
+		if meta.has_field(fieldname):
+			label = meta.get_label(fieldname) or fieldname
+			if label in fields:
+				priority_labels.append(label)
+	status_field = profile.get("status_field")
+	if status_field and meta.has_field(status_field):
+		label = meta.get_label(status_field) or status_field
+		if label in fields and label not in priority_labels:
+			priority_labels.insert(0, label)
+
+	ordered = {}
+	for label in priority_labels:
+		ordered[label] = fields[label]
+	for label, value in fields.items():
+		if label not in ordered:
+			ordered[label] = value
+	return ordered
+
+
+def _order_child_tables(summary):
+	child_tables = summary.get("child_tables") or {}
+	if not child_tables:
+		return child_tables
+
+	profile = get_advisor_profile(summary.get("doctype") or "")
+	priority = list(profile.get("summary_child_tables") or [])
+	if not priority:
+		return child_tables
+
+	meta = frappe.get_meta(summary["doctype"])
+	label_by_field = {}
+	for field in meta.fields:
+		if field.fieldtype == "Table":
+			label_by_field[field.fieldname] = field.label or field.fieldname
+
+	ordered = {}
+	for fieldname in priority:
+		label = label_by_field.get(fieldname)
+		if label and label in child_tables:
+			ordered[label] = child_tables[label]
+	for label, data in child_tables.items():
+		if label not in ordered:
+			ordered[label] = data
+	return ordered
 
 
 def format_doc_summary_block(summary, *, char_budget=CONTEXT_CHAR_BUDGET):
@@ -269,8 +342,11 @@ def format_doc_summary_block(summary, *, char_budget=CONTEXT_CHAR_BUDGET):
 		"## Open document data",
 		f"DocType: **{summary['doctype']}**",
 		f"Document: **{summary['name']}**",
-		f"Status: **{summary['docstatus']}**",
 	]
+	status_line = summary.get("profile_status") or summary.get("docstatus")
+	lines.append(f"Status: **{status_line}**")
+	if summary.get("greet_facts"):
+		lines.append("Key facts: " + " · ".join(summary["greet_facts"][:5]))
 	if summary.get("owner"):
 		lines.append(f"Owner: {summary['owner']}")
 	if summary.get("modified"):
